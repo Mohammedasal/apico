@@ -98,6 +98,8 @@
             .app-shell { display:block; }
             main { max-width:none; padding:0; }
             body { background:#fff; font-size:10px; }
+            body.print-ledger-only main > :not(.ledger-print-area) { display:none !important; }
+            body.print-ledger-only .ledger-print-area { display:block !important; }
             h1 { font-size:18px; margin:0 0 4px; }
             h2 { font-size:12px; margin:10px 0 5px; }
             .grid { grid-template-columns:repeat(4, 1fr); gap:6px; margin:8px 0 !important; }

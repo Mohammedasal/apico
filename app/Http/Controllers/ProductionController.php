@@ -19,12 +19,17 @@ class ProductionController extends Controller
         $start = Carbon::create($year, $month, 1);
         $end = $start->copy()->endOfMonth();
 
-        $entries = ProductionDay::whereBetween('date', [$start->toDateString(), $end->toDateString()])
+        $entries = ProductionDay::whereDate('date', '>=', $start->toDateString())
+            ->whereDate('date', '<=', $end->toDateString())
             ->get()
             ->keyBy(fn (ProductionDay $day) => $day->date->toDateString());
         $expense = MonthlyExpense::firstOrNew(['year' => $year, 'month' => $month]);
-        $recycleIncome = (float) RecycleOut::whereBetween('date', [$start, $end])->sum('total_amount');
-        $stockIncome = (float) StockSale::whereBetween('date', [$start, $end])->sum('sales_value');
+        $recycleIncome = (float) RecycleOut::whereDate('date', '>=', $start->toDateString())
+            ->whereDate('date', '<=', $end->toDateString())
+            ->sum('total_amount');
+        $stockIncome = (float) StockSale::whereDate('date', '>=', $start->toDateString())
+            ->whereDate('date', '<=', $end->toDateString())
+            ->sum('sales_value');
         $income = round($recycleIncome + $stockIncome, 3);
         $productionKg = round($entries->sum(fn (ProductionDay $day) => $day->total_kg), 3);
         $productionTons = round($productionKg / 1000, 3);
@@ -136,13 +141,19 @@ class ProductionController extends Controller
             ];
         }
 
-        $entries = ProductionDay::whereBetween('date', [$start->toDateString(), $end->toDateString()])->get();
+        $entries = ProductionDay::whereDate('date', '>=', $start->toDateString())
+            ->whereDate('date', '<=', $end->toDateString())
+            ->get();
         $productionKg = round($entries->sum(fn (ProductionDay $day) => $day->total_kg), 3);
         $productionTons = round($productionKg / 1000, 3);
         $productionDays = $entries->filter(fn (ProductionDay $day) => $day->total_kg > 0)->count();
         $actualIncome = round(
-            (float) RecycleOut::whereBetween('date', [$start, $end])->sum('total_amount')
-            + (float) StockSale::whereBetween('date', [$start, $end])->sum('sales_value'),
+            (float) RecycleOut::whereDate('date', '>=', $start->toDateString())
+                ->whereDate('date', '<=', $end->toDateString())
+                ->sum('total_amount')
+            + (float) StockSale::whereDate('date', '>=', $start->toDateString())
+                ->whereDate('date', '<=', $end->toDateString())
+                ->sum('sales_value'),
             3
         );
         $actual = $calculator->actualProfitSummary($start->toDateString(), $end->toDateString());

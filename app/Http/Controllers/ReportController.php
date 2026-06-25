@@ -56,19 +56,20 @@ class ReportController extends Controller
             $from = sprintf('%d-%02d-01', $year, $month);
             $to = date('Y-m-t', strtotime($from));
 
-            $recycleOutKg = RecycleOut::whereBetween('date', [$from, $to])->sum('weight_kg');
-            $wasteKg = RecycleOut::whereBetween('date', [$from, $to])->sum('waste_kg');
+            $dateRange = fn ($query) => $query->whereDate('date', '>=', $from)->whereDate('date', '<=', $to);
+            $recycleOutKg = RecycleOut::query()->tap($dateRange)->sum('weight_kg');
+            $wasteKg = RecycleOut::query()->tap($dateRange)->sum('waste_kg');
 
             return [
                 'month' => date('M Y', strtotime($from)),
-                'recycle_in_kg' => RecycleIn::whereBetween('date', [$from, $to])->sum('weight_kg'),
+                'recycle_in_kg' => RecycleIn::query()->tap($dateRange)->sum('weight_kg'),
                 'recycle_out_kg' => $recycleOutKg,
-                'recycled_out_kg' => RecycleOut::whereBetween('date', [$from, $to])->sum('recycled_out_kg'),
+                'recycled_out_kg' => RecycleOut::query()->tap($dateRange)->sum('recycled_out_kg'),
                 'waste_kg' => $wasteKg,
                 'waste_percentage' => $recycleOutKg > 0 ? round(((float) $wasteKg / (float) $recycleOutKg) * 100, 2) : 0,
-                'non_recycled_kg' => RecycleOut::whereBetween('date', [$from, $to])->sum('non_recycled_kg'),
-                'payments' => Payment::whereBetween('date', [$from, $to])->sum('amount'),
-                'stock_sales' => StockSale::whereBetween('date', [$from, $to])->sum('sales_value'),
+                'non_recycled_kg' => RecycleOut::query()->tap($dateRange)->sum('non_recycled_kg'),
+                'payments' => Payment::query()->tap($dateRange)->sum('amount'),
+                'stock_sales' => StockSale::query()->tap($dateRange)->sum('sales_value'),
                 'stock_profit' => $calculator->stockProfitSummary($from, $to)['profit'],
                 'actual_cost_per_ton' => $calculator->actualCostPerTonForPeriod($from, $to),
                 'actual_profit_loss' => $calculator->actualProfitSummary($from, $to)['actual_profit_loss'],
@@ -136,7 +137,8 @@ class ReportController extends Controller
     private function stockProfitSales(string $from, string $to, string $search, ?int $customerId, ?int $materialId)
     {
         return StockSale::with(['customer', 'material'])
-            ->whereBetween('date', [$from, $to])
+            ->whereDate('date', '>=', $from)
+            ->whereDate('date', '<=', $to)
             ->when($customerId, fn ($query) => $query->where('customer_id', $customerId))
             ->when($materialId, fn ($query) => $query->where('material_id', $materialId))
             ->when($search !== '', function ($query) use ($search) {

@@ -15,6 +15,7 @@ use App\Models\Supplier;
 use App\Models\SupplierPayment;
 use App\Services\ApicoCalculator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class ApicoCalculatorTest extends TestCase
@@ -56,6 +57,36 @@ class ApicoCalculatorTest extends TestCase
         $this->assertSame(700.0, $statement['period_payments']);
         $this->assertSame(500.0, $statement['closing_balance']);
         $this->assertSame(500.0, (float) $statement['tables']['payments']->first()->remaining_balance);
+
+        $stockSaleRow = $statement['transactions']->firstWhere('type', 'Stock Sale');
+        $this->assertSame(-1000.0, $stockSaleRow['display_weight']);
+        $this->assertSame(0.0, (float) $stockSaleRow['weight_delta']);
+        $this->assertSame(-5000.0, $stockSaleRow['running_weight']);
+    }
+
+    public function test_customer_statement_includes_datetime_rows_on_the_end_date(): void
+    {
+        $calculator = app(ApicoCalculator::class);
+        $customer = Customer::create(['name' => 'End Date Customer', 'status' => 'active']);
+
+        DB::table('recycle_outs')->insert([
+            'date' => '2026-06-21 00:00:00',
+            'customer_id' => $customer->id,
+            'weight_kg' => 3750,
+            'recycled_out_kg' => 3750,
+            'waste_kg' => 0,
+            'non_recycled_kg' => 0,
+            'rate_per_kg' => 0.14,
+            'total_amount' => 525,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $statement = $calculator->customerStatement($customer, '2026-06-01', '2026-06-21');
+
+        $this->assertSame(525.0, $statement['closing_balance']);
+        $this->assertSame(525.0, $statement['period_recycle_charges']);
+        $this->assertCount(1, $statement['transactions']);
     }
 
     public function test_stock_sale_profit_and_remaining_stock_are_calculated(): void

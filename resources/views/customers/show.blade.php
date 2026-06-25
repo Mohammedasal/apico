@@ -9,6 +9,7 @@
     </div>
     <div class="no-print">
         <button type="button" onclick="window.print()">{{ __('Print / Save PDF') }}</button>
+        <button type="button" onclick="printLedgerOnly()">{{ __('Print Ledger Only') }}</button>
         @if (auth()->user()?->canWriteOperationalData())
             <a class="button" href="{{ route('customers.edit', $customer) }}">{{ __('Edit') }}</a>
         @endif
@@ -102,24 +103,35 @@
     </tbody>
 </table>
 
-<h2>{{ __('Running Ledger') }}</h2>
-<table class="statement-table ledger-table">
-    <thead><tr><th>{{ __('Date') }}</th><th>{{ __('Type') }}</th><th>{{ __('Description') }}</th><th>{{ __('Kg +/-') }}</th><th>{{ __('JOD +/-') }}</th><th>{{ __('Running JOD Balance') }}</th><th>{{ __('Running Kg Balance') }}</th><th>{{ __('Notes') }}</th></tr></thead>
-    <tbody>
-    @forelse ($statement['transactions'] as $row)
-        <tr>
-            <td>{{ $row['date'] }}</td>
-            <td>{{ __($row['type']) }}</td>
-            <td class="description-cell">{{ $row['description'] ?: '-' }}</td>
-            <td @class(['amount-negative' => $row['weight_delta'] < 0, 'amount-positive' => $row['weight_delta'] > 0])>{{ number_format($row['weight_delta'], 3) }}</td>
-            <td @class(['amount-negative' => $row['amount'] < 0, 'amount-positive' => $row['amount'] > 0])>{{ number_format($row['amount'], 3) }}</td>
-            <td>{{ number_format($row['running_balance'], 3) }}</td>
-            <td>{{ number_format($row['running_weight'], 3) }}</td>
-            <td class="notes-cell">{{ $row['notes'] }}</td>
-        </tr>
-    @empty
-        <tr><td colspan="8">{{ __('No transactions in this range.') }}</td></tr>
-    @endforelse
-    </tbody>
-</table>
+<div class="ledger-print-area">
+    <h2>{{ __('Running Ledger') }}</h2>
+    <table class="statement-table ledger-table">
+        <thead><tr><th>{{ __('Date') }}</th><th>{{ __('Type') }}</th><th>{{ __('Description') }}</th><th>{{ __('Kg +/-') }}</th><th>{{ __('JOD +/-') }}</th><th>{{ __('Running JOD Balance') }}</th><th>{{ __('Running Kg Balance') }}</th><th>{{ __('Notes') }}</th></tr></thead>
+        <tbody>
+        @forelse ($statement['transactions'] as $row)
+            <tr>
+                <td>{{ $row['date'] }}</td>
+                <td>{{ __($row['type']) }}</td>
+                <td class="description-cell">{{ $row['description'] ?: '-' }}</td>
+                <td @class(['amount-negative' => ($row['display_weight'] ?? $row['weight_delta']) < 0, 'amount-positive' => ($row['display_weight'] ?? $row['weight_delta']) > 0])>{{ number_format($row['display_weight'] ?? $row['weight_delta'], 3) }}</td>
+                <td @class(['amount-negative' => $row['amount'] < 0, 'amount-positive' => $row['amount'] > 0])>{{ number_format($row['amount'], 3) }}</td>
+                <td>{{ number_format($row['running_balance'], 3) }}</td>
+                <td>{{ number_format($row['running_weight'], 3) }}</td>
+                <td class="notes-cell">{{ $row['notes'] }}</td>
+            </tr>
+        @empty
+            <tr><td colspan="8">{{ __('No transactions in this range.') }}</td></tr>
+        @endforelse
+        </tbody>
+    </table>
+</div>
+<script>
+    function printLedgerOnly() {
+        document.body.classList.add('print-ledger-only');
+        window.print();
+        setTimeout(function () {
+            document.body.classList.remove('print-ledger-only');
+        }, 500);
+    }
+</script>
 @endsection

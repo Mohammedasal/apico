@@ -18,8 +18,8 @@ class DashboardController extends Controller
         $from = $request->input('from');
         $to = $request->input('to');
         $dateRange = fn ($query) => $query
-            ->when($from, fn ($query) => $query->where('date', '>=', $from))
-            ->when($to, fn ($query) => $query->where('date', '<=', $to));
+            ->when($from, fn ($query) => $query->whereDate('date', '>=', $from))
+            ->when($to, fn ($query) => $query->whereDate('date', '<=', $to));
 
         $recycleOutKg = RecycleOut::query()->tap($dateRange)->sum('weight_kg');
         $productionKg = RecycleOut::query()->tap($dateRange)->sum('recycled_out_kg');

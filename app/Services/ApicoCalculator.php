@@ -52,8 +52,8 @@ class ApicoCalculator
     public function stockProfitSummary(?string $from = null, ?string $to = null): array
     {
         $dateRange = fn ($query) => $query
-            ->when($from, fn ($query) => $query->where('date', '>=', $from))
-            ->when($to, fn ($query) => $query->where('date', '<=', $to));
+            ->when($from, fn ($query) => $query->whereDate('date', '>=', $from))
+            ->when($to, fn ($query) => $query->whereDate('date', '<=', $to));
 
         $revenue = (float) StockSale::query()->tap($dateRange)->sum('sales_value');
         $materialCogs = $this->stockMaterialCogs($from, $to);
@@ -66,7 +66,8 @@ class ApicoCalculator
             [$year, $month] = array_map('intval', explode('-', $yearMonth));
             $monthStart = Carbon::create($year, $month, 1);
             $monthEnd = $monthStart->copy()->endOfMonth();
-            $productionKg = ProductionDay::whereBetween('date', [$monthStart->toDateString(), $monthEnd->toDateString()])
+            $productionKg = ProductionDay::whereDate('date', '>=', $monthStart->toDateString())
+                ->whereDate('date', '<=', $monthEnd->toDateString())
                 ->get()
                 ->sum(fn (ProductionDay $day) => (float) $day->total_kg);
             $productionTons = $productionKg / 1000;
@@ -96,7 +97,8 @@ class ApicoCalculator
     {
         $start = Carbon::create($year, $month, 1);
         $end = $start->copy()->endOfMonth();
-        $productionKg = ProductionDay::whereBetween('date', [$start->toDateString(), $end->toDateString()])
+        $productionKg = ProductionDay::whereDate('date', '>=', $start->toDateString())
+            ->whereDate('date', '<=', $end->toDateString())
             ->get()
             ->sum(fn (ProductionDay $day) => (float) $day->total_kg);
 
@@ -124,8 +126,8 @@ class ApicoCalculator
     public function actualCostPerTonForPeriod(?string $from = null, ?string $to = null): float
     {
         $dateRange = fn ($query) => $query
-            ->when($from, fn ($query) => $query->where('date', '>=', $from))
-            ->when($to, fn ($query) => $query->where('date', '<=', $to));
+            ->when($from, fn ($query) => $query->whereDate('date', '>=', $from))
+            ->when($to, fn ($query) => $query->whereDate('date', '<=', $to));
         $productionKg = ProductionDay::query()
             ->tap($dateRange)
             ->get()
@@ -141,8 +143,8 @@ class ApicoCalculator
     public function actualProfitSummary(?string $from = null, ?string $to = null): array
     {
         $dateRange = fn ($query) => $query
-            ->when($from, fn ($query) => $query->where('date', '>=', $from))
-            ->when($to, fn ($query) => $query->where('date', '<=', $to));
+            ->when($from, fn ($query) => $query->whereDate('date', '>=', $from))
+            ->when($to, fn ($query) => $query->whereDate('date', '<=', $to));
         $stock = $this->stockProfitSummary($from, $to);
         $recycleIncome = (float) RecycleOut::query()->tap($dateRange)->sum('total_amount');
         $operatingExpenses = $this->operatingExpenses($from, $to);
@@ -186,7 +188,7 @@ class ApicoCalculator
         $cogs = 0.0;
 
         $purchases = StockPurchase::query()
-            ->when($toDate, fn ($query) => $query->where('date', '<=', $toDate))
+            ->when($toDate, fn ($query) => $query->whereDate('date', '<=', $toDate))
             ->get(['date', 'material_id', 'weight_kg', 'total_cost'])
             ->map(fn (StockPurchase $purchase) => [
                 'type' => 'purchase',
@@ -197,7 +199,7 @@ class ApicoCalculator
                 'amount' => (float) $purchase->total_cost,
             ]);
         $sales = StockSale::query()
-            ->when($toDate, fn ($query) => $query->where('date', '<=', $toDate))
+            ->when($toDate, fn ($query) => $query->whereDate('date', '<=', $toDate))
             ->get(['date', 'material_id', 'weight_kg'])
             ->map(fn (StockSale $sale) => [
                 'type' => 'sale',
@@ -245,7 +247,7 @@ class ApicoCalculator
 
     public function customerBalance(Customer $customer, ?string $beforeDate = null): float
     {
-        $queryDate = fn ($query) => $beforeDate ? $query->where('date', '<', $beforeDate) : $query;
+        $queryDate = fn ($query) => $beforeDate ? $query->whereDate('date', '<', $beforeDate) : $query;
 
         $recycleOut = RecycleOut::where('customer_id', $customer->id)->tap($queryDate)->sum('total_amount');
         $stockSales = StockSale::where('customer_id', $customer->id)->tap($queryDate)->sum('sales_value');
@@ -256,7 +258,7 @@ class ApicoCalculator
 
     public function customerWeightDifference(Customer $customer, ?string $beforeDate = null): float
     {
-        $queryDate = fn ($query) => $beforeDate ? $query->where('date', '<', $beforeDate) : $query;
+        $queryDate = fn ($query) => $beforeDate ? $query->whereDate('date', '<', $beforeDate) : $query;
 
         $in = RecycleIn::where('customer_id', $customer->id)->tap($queryDate)->sum('weight_kg');
         $out = RecycleOut::where('customer_id', $customer->id)->tap($queryDate)->sum('weight_kg');
@@ -313,7 +315,7 @@ class ApicoCalculator
 
     public function supplierBalance(Supplier $supplier, ?string $beforeDate = null): float
     {
-        $queryDate = fn ($query) => $beforeDate ? $query->where('date', '<', $beforeDate) : $query;
+        $queryDate = fn ($query) => $beforeDate ? $query->whereDate('date', '<', $beforeDate) : $query;
 
         $purchases = StockPurchase::where('supplier_id', $supplier->id)->tap($queryDate)->sum('total_cost');
         $payments = SupplierPayment::where('supplier_id', $supplier->id)->tap($queryDate)->sum('amount');
@@ -326,7 +328,7 @@ class ApicoCalculator
         $fromDate = $from ?: '1900-01-01';
         $toDate = $to ?: Carbon::today()->toDateString();
         $runningBalance = $this->supplierBalance($supplier, $fromDate);
-        $between = fn ($query) => $query->whereBetween('date', [$fromDate, $toDate]);
+        $between = fn ($query) => $query->whereDate('date', '>=', $fromDate)->whereDate('date', '<=', $toDate);
         $purchases = StockPurchase::with('material')
             ->where('supplier_id', $supplier->id)
             ->tap($between)
@@ -411,7 +413,7 @@ class ApicoCalculator
 
     private function customerStatementTables(Customer $customer, string $from, string $to): array
     {
-        $between = fn ($query) => $query->whereBetween('date', [$from, $to]);
+        $between = fn ($query) => $query->whereDate('date', '>=', $from)->whereDate('date', '<=', $to);
 
         return [
             'recycle_ins' => RecycleIn::with('material')
@@ -442,7 +444,7 @@ class ApicoCalculator
 
     private function customerTransactions(Customer $customer, string $from, string $to): Collection
     {
-        $between = fn ($query) => $query->whereBetween('date', [$from, $to]);
+        $between = fn ($query) => $query->whereDate('date', '>=', $from)->whereDate('date', '<=', $to);
 
         return collect()
             ->merge(RecycleIn::with('material')->where('customer_id', $customer->id)->tap($between)->get()->map(fn ($item) => [
@@ -452,6 +454,7 @@ class ApicoCalculator
                 'type' => 'Recycle In',
                 'description' => $item->material?->name ?: '-',
                 'weight_delta' => (float) $item->weight_kg,
+                'display_weight' => (float) $item->weight_kg,
                 'balance_delta' => 0,
                 'amount' => 0,
                 'notes' => $item->notes,
@@ -461,11 +464,9 @@ class ApicoCalculator
                 'sort' => 20,
                 'date' => $item->date->toDateString(),
                 'type' => 'Recycle Out',
-                'description' => trim(($item->material?->name ? $item->material->name.' | ' : '')
-                    .__('Recycled').': '.number_format((float) $item->recycled_out_kg, 3).' '.__('kg')
-                    .' | '.__('Waste').': '.number_format((float) $item->waste_kg, 3).' '.__('kg')
-                    .' | '.__('Non-recycled').': '.number_format((float) $item->non_recycled_kg, 3).' '.__('kg')),
+                'description' => $this->recycleOutDescription($item),
                 'weight_delta' => -1 * (float) $item->weight_kg,
+                'display_weight' => -1 * (float) $item->weight_kg,
                 'balance_delta' => (float) $item->total_amount,
                 'amount' => (float) $item->total_amount,
                 'notes' => $item->notes,
@@ -477,6 +478,7 @@ class ApicoCalculator
                 'type' => 'Stock Sale',
                 'description' => $item->material?->name ?: '-',
                 'weight_delta' => 0,
+                'display_weight' => -1 * (float) $item->weight_kg,
                 'balance_delta' => (float) $item->sales_value,
                 'amount' => (float) $item->sales_value,
                 'notes' => $item->notes,
@@ -488,9 +490,31 @@ class ApicoCalculator
                 'type' => 'Payment',
                 'description' => $item->payment_method ?: 'Payment',
                 'weight_delta' => 0,
+                'display_weight' => 0,
                 'balance_delta' => -1 * (float) $item->amount,
                 'amount' => -1 * (float) $item->amount,
                 'notes' => $item->notes,
             ]));
+    }
+
+    private function recycleOutDescription(RecycleOut $item): string
+    {
+        $parts = [];
+
+        if ($item->material?->name) {
+            $parts[] = $item->material->name;
+        }
+
+        foreach ([
+            __('Recycled') => (float) $item->recycled_out_kg,
+            __('Waste') => (float) $item->waste_kg,
+            __('Non-recycled') => (float) $item->non_recycled_kg,
+        ] as $label => $value) {
+            if (abs($value) >= 0.0005) {
+                $parts[] = $label.': '.number_format($value, 3).' '.__('kg');
+            }
+        }
+
+        return implode(' | ', $parts);
     }
 }

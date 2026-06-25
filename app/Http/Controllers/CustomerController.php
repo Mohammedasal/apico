@@ -72,7 +72,7 @@ class CustomerController extends Controller
             'date' => $row['date'],
             'type' => __($row['type']),
             'description' => $row['description'],
-            'weight_delta' => number_format((float) $row['weight_delta'], 3, '.', ''),
+            'weight_delta' => number_format((float) ($row['display_weight'] ?? $row['weight_delta']), 3, '.', ''),
             'amount' => number_format((float) $row['amount'], 3, '.', ''),
             'running_balance' => number_format((float) $row['running_balance'], 3, '.', ''),
             'running_weight' => number_format((float) $row['running_weight'], 3, '.', ''),
