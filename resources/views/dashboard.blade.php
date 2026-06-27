@@ -9,6 +9,7 @@
     <form class="filters" method="get">
         <div><label>{{ __('From') }}</label><input type="date" name="from" value="{{ $from }}"></div>
         <div><label>{{ __('To') }}</label><input type="date" name="to" value="{{ $to }}"></div>
+        <input type="hidden" name="performance_year" value="{{ $performanceYear }}">
         <div><button>{{ __('Apply') }}</button></div>
     </form>
 </div>
@@ -128,6 +129,21 @@
     <div class="card kpi-card"><div class="muted">{{ __('Remaining Stock Kg') }}</div><div class="kpi">{{ number_format($remainingStock, 3) }}</div><a href="{{ route('operations.index', 'stock-sales') }}">{{ __('Stock sales') }}</a></div>
 </div>
 
+@if (auth()->user()?->canViewFinancialReports())
+<div class="section-title">
+    <h2>{{ __('Monthly Performance') }}</h2>
+    <form class="filters" method="get" style="padding:0;border:0;background:transparent">
+        <input type="hidden" name="from" value="{{ $from }}">
+        <input type="hidden" name="to" value="{{ $to }}">
+        <div><label>{{ __('Year') }}</label><input type="number" name="performance_year" value="{{ $performanceYear }}" min="2000" max="2100"></div>
+        <div><button>{{ __('Open') }}</button></div>
+    </form>
+</div>
+<div class="card">
+    <canvas id="monthlyPerformanceChart" height="100"></canvas>
+</div>
+@endif
+
 <div class="section-title">
     <h2>{{ __('Totals Chart') }}</h2>
 </div>
@@ -154,5 +170,56 @@ new Chart(document.getElementById('summaryChart'), {
         scales: { x: { grid: { display: false } }, y: { beginAtZero: true } }
     }
 });
+
+@if (auth()->user()?->canViewFinancialReports())
+const monthlyPerformance = @json($monthlyPerformance);
+new Chart(document.getElementById('monthlyPerformanceChart'), {
+    data: {
+        labels: monthlyPerformance.map((row) => row.label),
+        datasets: [
+            {
+                type: 'bar',
+                label: @json(__('Income')),
+                data: monthlyPerformance.map((row) => row.income),
+                backgroundColor: '#2563eb',
+                borderRadius: 4
+            },
+            {
+                type: 'bar',
+                label: @json(__('Expenses')),
+                data: monthlyPerformance.map((row) => row.expenses),
+                backgroundColor: '#b91c1c',
+                borderRadius: 4
+            },
+            {
+                type: 'bar',
+                label: @json(__('Material COGS')),
+                data: monthlyPerformance.map((row) => row.material_cogs),
+                backgroundColor: '#b45309',
+                borderRadius: 4
+            },
+            {
+                type: 'line',
+                label: @json(__('Actual P&L')),
+                data: monthlyPerformance.map((row) => row.profit_loss),
+                borderColor: '#166534',
+                backgroundColor: '#166534',
+                borderWidth: 3,
+                pointRadius: 3,
+                tension: 0.25
+            }
+        ]
+    },
+    options: {
+        responsive: true,
+        interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { position: 'bottom' } },
+        scales: {
+            x: { grid: { display: false } },
+            y: { beginAtZero: true }
+        }
+    }
+});
+@endif
 </script>
 @endsection

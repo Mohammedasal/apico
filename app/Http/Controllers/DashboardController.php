@@ -9,6 +9,7 @@ use App\Models\RecycleOut;
 use App\Models\StockPurchase;
 use App\Models\StockSale;
 use App\Services\ApicoCalculator;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 
 class DashboardController extends Controller
@@ -35,10 +36,13 @@ class DashboardController extends Controller
         $stockProfit = $calculator->stockProfitSummary($from, $to);
         $actualProfit = $calculator->actualProfitSummary($from, $to);
         $lastCompletedMonthCost = $calculator->lastCompletedMonthActualCostPerTon();
+        $performanceYear = (int) $request->input('performance_year', Carbon::today()->year);
 
         return view('dashboard', [
             'from' => $from,
             'to' => $to,
+            'performanceYear' => $performanceYear,
+            'monthlyPerformance' => $this->monthlyPerformance($calculator, $performanceYear),
             'customerCount' => $customers->count(),
             'receivables' => round((float) $receivables, 3),
             'recycleInKg' => RecycleIn::query()->tap($dateRange)->sum('weight_kg'),
@@ -60,5 +64,24 @@ class DashboardController extends Controller
             'remainingStock' => $calculator->remainingStockWeight(),
             'purchases' => StockPurchase::query()->tap($dateRange)->sum('total_cost'),
         ]);
+    }
+
+    private function monthlyPerformance(ApicoCalculator $calculator, int $year): array
+    {
+        return collect(range(1, 12))
+            ->map(function (int $month) use ($calculator, $year) {
+                $start = Carbon::create($year, $month, 1);
+                $end = $start->copy()->endOfMonth();
+                $summary = $calculator->actualProfitSummary($start->toDateString(), $end->toDateString());
+
+                return [
+                    'label' => $start->format('M'),
+                    'income' => round((float) $summary['recycle_income'] + (float) $summary['stock_revenue'], 3),
+                    'expenses' => round((float) $summary['operating_expenses'], 3),
+                    'material_cogs' => round((float) $summary['stock_material_cogs'], 3),
+                    'profit_loss' => round((float) $summary['actual_profit_loss'], 3),
+                ];
+            })
+            ->all();
     }
 }
