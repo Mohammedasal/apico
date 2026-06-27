@@ -13,6 +13,27 @@
     </form>
 </div>
 
+@if (auth()->user()?->canManageSystem())
+<div class="section-title"><h2>{{ __('Production Sheet Upload') }}</h2></div>
+<form class="filters" method="post" action="{{ route('imports.production-sheet.store') }}" enctype="multipart/form-data">
+    @csrf
+    <div><label>{{ __('Excel File') }}</label><input type="file" name="production_sheet" accept=".xlsx" required>@error('production_sheet')<div class="error">{{ $message }}</div>@enderror</div>
+    <div><button>{{ __('Import Production & Expenses') }}</button></div>
+</form>
+@endif
+
+@if (session('production_import_result'))
+    @php $productionImport = session('production_import_result'); @endphp
+    <div class="section-title">
+        <h2>{{ __('Last Production Import') }}</h2>
+    </div>
+    <div class="grid">
+        <div class="card kpi-card"><div class="muted">{{ __('Year') }}</div><div class="kpi">{{ $productionImport['year'] }}</div></div>
+        <div class="card kpi-card"><div class="muted">{{ __('Production Days') }}</div><div class="kpi">{{ $productionImport['production_days'] }}</div></div>
+        <div class="card kpi-card"><div class="muted">{{ __('Monthly Expense Rows') }}</div><div class="kpi">{{ $productionImport['monthly_expenses'] }}</div></div>
+    </div>
+@endif
+
 <div class="section-title"><h2>{{ __('Completed Months Actual P&L') }}</h2></div>
 <div class="grid">
     <div class="card kpi-card">

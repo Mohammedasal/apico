@@ -68,7 +68,10 @@ class ExcelImportController extends Controller
         });
 
         return redirect()
-            ->route('dashboard')
+            ->route('production.index', [
+                'year' => $result['year'],
+                'month' => now()->month,
+            ])
             ->with('status', 'Production sheet imported. P&L production and expenses were updated.')
             ->with('production_import_result', $result);
     }
