@@ -24,9 +24,8 @@ class CustomerController extends Controller
                 });
             })
             ->orderBy('name')
-            ->paginate(25)
-            ->withQueryString();
-        $customers->getCollection()->each(function (Customer $customer) use ($calculator) {
+            ->get();
+        $customers->each(function (Customer $customer) use ($calculator) {
             $customer->setAttribute('remaining_balance_jod', $calculator->customerBalance($customer));
             $customer->setAttribute('remaining_balance_kg', $calculator->customerWeightDifference($customer));
         });

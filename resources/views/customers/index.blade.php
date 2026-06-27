@@ -18,10 +18,10 @@
 <table id="customersTable">
     <thead>
         <tr>
-            <th><button class="table-sort" type="button" data-sort-column="0" data-sort-type="text">{{ __('Name') }} <span aria-hidden="true">↕</span></button></th>
-            <th><button class="table-sort" type="button" data-sort-column="1" data-sort-type="number">{{ __('Remaining Balance Kg') }} <span aria-hidden="true">↕</span></button></th>
-            <th><button class="table-sort" type="button" data-sort-column="2" data-sort-type="number">{{ __('Remaining Balance JOD') }} <span aria-hidden="true">↕</span></button></th>
-            <th><button class="table-sort" type="button" data-sort-column="3" data-sort-type="text">{{ __('Status') }} <span aria-hidden="true">↕</span></button></th>
+            <th><button class="table-sort" type="button" data-sort-column="0" data-sort-type="text">{{ __('Name') }} <span aria-hidden="true">--</span></button></th>
+            <th><button class="table-sort" type="button" data-sort-column="1" data-sort-type="number">{{ __('Remaining Balance Kg') }} <span aria-hidden="true">--</span></button></th>
+            <th><button class="table-sort" type="button" data-sort-column="2" data-sort-type="number">{{ __('Remaining Balance JOD') }} <span aria-hidden="true">--</span></button></th>
+            <th><button class="table-sort" type="button" data-sort-column="3" data-sort-type="text">{{ __('Status') }} <span aria-hidden="true">--</span></button></th>
             <th></th>
         </tr>
     </thead>
@@ -43,7 +43,6 @@
     </tbody>
 </table>
 </div>
-{{ $customers->links() }}
 <script>
 document.querySelectorAll('#customersTable .table-sort').forEach((button) => {
     button.addEventListener('click', () => {
@@ -55,11 +54,11 @@ document.querySelectorAll('#customersTable .table-sort').forEach((button) => {
 
         table.querySelectorAll('.table-sort').forEach((sortButton) => {
             sortButton.dataset.direction = '';
-            sortButton.querySelector('span').textContent = '↕';
+            sortButton.querySelector('span').textContent = '--';
         });
 
         button.dataset.direction = currentDirection;
-        button.querySelector('span').textContent = currentDirection === 'asc' ? '↑' : '↓';
+        button.querySelector('span').textContent = currentDirection === 'asc' ? 'ASC' : 'DESC';
 
         [...tbody.querySelectorAll('tr')]
             .sort((leftRow, rightRow) => {
