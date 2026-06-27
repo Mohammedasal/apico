@@ -16,13 +16,13 @@
 </form>
 <div class="table-wrap">
 <table>
-    <thead><tr><th>{{ __('Name') }}</th><th>{{ __('Phone') }}</th><th>{{ __('Location') }}</th><th>{{ __('Status') }}</th><th></th></tr></thead>
+    <thead><tr><th>{{ __('Name') }}</th><th>{{ __('Remaining Balance Kg') }}</th><th>{{ __('Remaining Balance JOD') }}</th><th>{{ __('Status') }}</th><th></th></tr></thead>
     <tbody>
     @foreach ($customers as $customer)
         <tr>
             <td>{{ $customer->name }}</td>
-            <td>{{ $customer->phone }}</td>
-            <td>{{ $customer->location }}</td>
+            <td @class(['amount-positive' => $customer->remaining_balance_kg >= 0, 'amount-negative' => $customer->remaining_balance_kg < 0])>{{ number_format($customer->remaining_balance_kg, 3) }}</td>
+            <td @class(['amount-positive' => $customer->remaining_balance_jod >= 0, 'amount-negative' => $customer->remaining_balance_jod < 0])>{{ number_format($customer->remaining_balance_jod, 3) }}</td>
             <td>{{ __(ucfirst($customer->status)) }}</td>
             <td>
                 <a href="{{ route('customers.show', $customer) }}">{{ __('Statement') }}</a>

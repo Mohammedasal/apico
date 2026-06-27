@@ -190,6 +190,7 @@
     "Total Due JOD": "إجمالي المستحق دينار",
     "Total Payment JOD": "إجمالي الدفعات دينار",
     "Remaining Balance JOD": "الرصيد المتبقي دينار",
+    "Remaining Balance Kg": "الرصيد المتبقي كغم",
     "Remaining receivable payment: :amount JOD": "الدفعة المستحقة المتبقية: :amount دينار",
     "Calculation: opening balance + recycle charges + stock sales - payments received.": "الحساب: الرصيد الافتتاحي + رسوم التدوير + مبيعات الستوك - الدفعات المستلمة.",
     "Recycle In Transactions": "حركات إدخال التدوير",

@@ -11,7 +11,7 @@ use Illuminate\Support\Str;
 
 class CustomerController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request, ApicoCalculator $calculator)
     {
         $search = trim((string) $request->input('q', ''));
         $customers = Customer::query()
@@ -26,6 +26,10 @@ class CustomerController extends Controller
             ->orderBy('name')
             ->paginate(25)
             ->withQueryString();
+        $customers->getCollection()->each(function (Customer $customer) use ($calculator) {
+            $customer->setAttribute('remaining_balance_jod', $calculator->customerBalance($customer));
+            $customer->setAttribute('remaining_balance_kg', $calculator->customerWeightDifference($customer));
+        });
 
         return view('customers.index', compact('customers', 'search'));
     }
