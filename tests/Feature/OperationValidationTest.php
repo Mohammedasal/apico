@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\Customer;
 use App\Models\Material;
+use App\Models\RecycleIn;
+use App\Models\RecycleOut;
 use App\Models\StockPurchase;
 use App\Models\Supplier;
 use App\Models\SupplierPayment;
@@ -169,6 +171,48 @@ class OperationValidationTest extends TestCase
 
         $response->assertSessionHasNoErrors();
         $this->assertDatabaseHas('recycle_ins', ['material_id' => null, 'weight_kg' => 10]);
+    }
+
+    public function test_recycle_lists_can_be_filtered_by_customer_date_and_weight(): void
+    {
+        $first = Customer::create(['name' => 'First Customer', 'status' => 'active']);
+        $second = Customer::create(['name' => 'Second Customer', 'status' => 'active']);
+
+        RecycleIn::create(['date' => '2026-01-05', 'customer_id' => $first->id, 'weight_kg' => 100, 'rate_per_kg' => 0, 'total_amount' => 0]);
+        RecycleIn::create(['date' => '2026-01-10', 'customer_id' => $second->id, 'weight_kg' => 250, 'rate_per_kg' => 0, 'total_amount' => 0]);
+
+        $response = $this->get(route('operations.index', [
+            'module' => 'recycle-in',
+            'customer_id' => $second->id,
+            'from' => '2026-01-09',
+            'to' => '2026-01-11',
+            'min_weight' => 200,
+            'max_weight' => 300,
+        ]));
+
+        $response->assertOk();
+        $response->assertSee('Second Customer');
+        $response->assertSee('250.000');
+        $response->assertDontSee('2026-01-05');
+        $response->assertDontSee('100.000');
+
+        RecycleOut::create(['date' => '2026-02-01', 'customer_id' => $first->id, 'weight_kg' => 50, 'recycled_out_kg' => 50, 'waste_kg' => 0, 'non_recycled_kg' => 0, 'rate_per_kg' => 1, 'total_amount' => 50]);
+        RecycleOut::create(['date' => '2026-02-02', 'customer_id' => $second->id, 'weight_kg' => 75, 'recycled_out_kg' => 75, 'waste_kg' => 0, 'non_recycled_kg' => 0, 'rate_per_kg' => 1, 'total_amount' => 75]);
+
+        $response = $this->get(route('operations.index', [
+            'module' => 'recycle-out',
+            'customer_id' => $second->id,
+            'from' => '2026-02-02',
+            'to' => '2026-02-02',
+            'min_weight' => 70,
+            'max_weight' => 80,
+        ]));
+
+        $response->assertOk();
+        $response->assertSee('Second Customer');
+        $response->assertSee('75.000');
+        $response->assertDontSee('2026-02-01');
+        $response->assertDontSee('50.000');
     }
 
     public function test_stock_sale_is_blocked_when_weight_exceeds_available_stock(): void

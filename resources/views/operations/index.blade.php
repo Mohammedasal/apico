@@ -7,6 +7,25 @@
         <a class="button" href="{{ route('operations.create', $module) }}">{{ __('New :item', ['item' => __($config['title'])]) }}</a>
     @endif
 </div>
+@if (in_array($module, ['recycle-in', 'recycle-out'], true))
+    <form class="filters" method="get" style="margin-bottom:14px">
+        <div>
+            <label>{{ __('Customer') }}</label>
+            <select name="customer_id" class="searchable-select" data-placeholder="{{ __('All customers') }}">
+                <option value="">{{ __('All customers') }}</option>
+                @foreach ($customers as $customer)
+                    <option value="{{ $customer->id }}" @selected(($filters['customer_id'] ?? null) === $customer->id)>{{ $customer->name }}</option>
+                @endforeach
+            </select>
+        </div>
+        <div><label>{{ __('From') }}</label><input type="date" name="from" value="{{ $filters['from'] ?? '' }}"></div>
+        <div><label>{{ __('To') }}</label><input type="date" name="to" value="{{ $filters['to'] ?? '' }}"></div>
+        <div><label>{{ __('Min Weight Kg') }}</label><input type="number" step="0.001" name="min_weight" value="{{ $filters['min_weight'] ?? '' }}"></div>
+        <div><label>{{ __('Max Weight Kg') }}</label><input type="number" step="0.001" name="max_weight" value="{{ $filters['max_weight'] ?? '' }}"></div>
+        <div><button>{{ __('Search') }}</button></div>
+        <div><a class="button" href="{{ route('operations.index', $module) }}">{{ __('Clear') }}</a></div>
+    </form>
+@endif
 <div class="table-wrap">
 <table>
     <thead>

@@ -25,16 +25,30 @@ class OperationController extends Controller
         'stock-sales' => ['title' => 'Stock Sales', 'model' => StockSale::class],
     ];
 
-    public function index(string $module)
+    public function index(string $module, Request $request)
     {
         $config = $this->module($module);
-        $records = $config['model']::query()
-            ->with($this->relations($module))
+        $filters = $this->filters($module, $request);
+        $query = $config['model']::query()
+            ->with($this->relations($module));
+
+        $this->applyFilters($module, $query, $filters);
+
+        $records = $query
             ->latest('date')
             ->latest('id')
-            ->paginate(25);
+            ->paginate(25)
+            ->withQueryString();
 
-        return view('operations.index', compact('module', 'config', 'records'));
+        return view('operations.index', [
+            'module' => $module,
+            'config' => $config,
+            'records' => $records,
+            'filters' => $filters,
+            'customers' => in_array($module, ['recycle-in', 'recycle-out'], true)
+                ? Customer::orderBy('name')->get()
+                : collect(),
+        ]);
     }
 
     public function create(string $module)
@@ -94,6 +108,35 @@ class OperationController extends Controller
             'stock-purchases' => ['supplier', 'material', 'creator', 'editor'],
             default => ['customer', 'material', 'creator', 'editor'],
         };
+    }
+
+    private function filters(string $module, Request $request): array
+    {
+        if (! in_array($module, ['recycle-in', 'recycle-out'], true)) {
+            return [];
+        }
+
+        return [
+            'customer_id' => $request->integer('customer_id') ?: null,
+            'from' => $request->input('from'),
+            'to' => $request->input('to'),
+            'min_weight' => $request->filled('min_weight') ? (float) $request->input('min_weight') : null,
+            'max_weight' => $request->filled('max_weight') ? (float) $request->input('max_weight') : null,
+        ];
+    }
+
+    private function applyFilters(string $module, $query, array $filters): void
+    {
+        if (! in_array($module, ['recycle-in', 'recycle-out'], true)) {
+            return;
+        }
+
+        $query
+            ->when($filters['customer_id'] ?? null, fn ($query, $customerId) => $query->where('customer_id', $customerId))
+            ->when($filters['from'] ?? null, fn ($query, $from) => $query->whereDate('date', '>=', $from))
+            ->when($filters['to'] ?? null, fn ($query, $to) => $query->whereDate('date', '<=', $to))
+            ->when(! is_null($filters['min_weight'] ?? null), fn ($query) => $query->where('weight_kg', '>=', $filters['min_weight']))
+            ->when(! is_null($filters['max_weight'] ?? null), fn ($query) => $query->where('weight_kg', '<=', $filters['max_weight']));
     }
 
     private function validated(string $module, Request $request, ApicoCalculator $calculator, ?int $ignoreId = null): array
