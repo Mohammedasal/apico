@@ -32,6 +32,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/imports/sales-sheet', [ExcelImportController::class, 'store'])
         ->middleware('role:admin')
         ->name('imports.sales-sheet.store');
+    Route::post('/imports/production-sheet', [ExcelImportController::class, 'production'])
+        ->middleware('role:admin')
+        ->name('imports.production-sheet.store');
 
     Route::get('/production', [ProductionController::class, 'index'])
         ->middleware('role:admin,viewer')

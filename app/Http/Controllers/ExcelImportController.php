@@ -10,6 +10,7 @@ use App\Models\StockPurchase;
 use App\Models\StockSale;
 use App\Models\Supplier;
 use App\Services\ApicoExcelImporter;
+use App\Services\ProductionExcelImporter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
@@ -49,6 +50,27 @@ class ExcelImportController extends Controller
             ->with('status', 'Sales sheet imported. Existing imported transactions were flushed first.')
             ->with('import_result', $result)
             ->with('date_issues', $dateIssues);
+    }
+
+    public function production(Request $request, ProductionExcelImporter $importer)
+    {
+        $data = $request->validate([
+            'production_sheet' => ['required', 'file', 'mimes:xlsx', 'max:20480'],
+        ]);
+
+        $path = $data['production_sheet']->storeAs(
+            'imports',
+            'apico-production-'.now()->format('Y-m-d-His').'.xlsx'
+        );
+
+        $result = DB::transaction(function () use ($importer, $path) {
+            return $importer->import(Storage::path($path));
+        });
+
+        return redirect()
+            ->route('dashboard')
+            ->with('status', 'Production sheet imported. P&L production and expenses were updated.')
+            ->with('production_import_result', $result);
     }
 
     private function backupDatabase(): void
