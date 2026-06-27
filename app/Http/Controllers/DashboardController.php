@@ -25,8 +25,13 @@ class DashboardController extends Controller
         $recycleOutKg = RecycleOut::query()->tap($dateRange)->sum('weight_kg');
         $productionKg = RecycleOut::query()->tap($dateRange)->sum('recycled_out_kg');
         $customers = Customer::all();
-        $receivables = $customers
-            ->sum(fn (Customer $customer) => max(0, $calculator->customerBalance($customer)));
+        $customerBalances = $customers->map(fn (Customer $customer) => [
+            'id' => $customer->id,
+            'name' => $customer->name,
+            'remaining_kg' => $calculator->customerWeightDifference($customer),
+            'remaining_jod' => $calculator->customerBalance($customer),
+        ]);
+        $receivables = $customerBalances->sum(fn (array $customer) => max(0, $customer['remaining_jod']));
         $productionDays = RecycleOut::query()
             ->tap($dateRange)
             ->where('date', '!=', '1900-01-01')
@@ -43,6 +48,14 @@ class DashboardController extends Controller
             'to' => $to,
             'performanceYear' => $performanceYear,
             'monthlyPerformance' => $this->monthlyPerformance($calculator, $performanceYear),
+            'topCustomerKgBalances' => $customerBalances
+                ->sortByDesc('remaining_kg')
+                ->take(5)
+                ->values(),
+            'topCustomerJodBalances' => $customerBalances
+                ->sortByDesc('remaining_jod')
+                ->take(5)
+                ->values(),
             'customerCount' => $customers->count(),
             'receivables' => round((float) $receivables, 3),
             'recycleInKg' => RecycleIn::query()->tap($dateRange)->sum('weight_kg'),

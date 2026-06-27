@@ -129,6 +129,45 @@
     <div class="card kpi-card"><div class="muted">{{ __('Remaining Stock Kg') }}</div><div class="kpi">{{ number_format($remainingStock, 3) }}</div><a href="{{ route('operations.index', 'stock-sales') }}">{{ __('Stock sales') }}</a></div>
 </div>
 
+<div class="grid" style="margin-top:10px">
+    <div class="card">
+        <h2 style="margin-top:0">{{ __('Top 5 Remaining Kg Customers') }}</h2>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>{{ __('Customer') }}</th><th>{{ __('Remaining Balance Kg') }}</th></tr></thead>
+                <tbody>
+                @forelse ($topCustomerKgBalances as $customer)
+                    <tr>
+                        <td><a href="{{ route('customers.show', $customer['id']) }}">{{ $customer['name'] }}</a></td>
+                        <td @class(['amount-positive' => $customer['remaining_kg'] >= 0, 'amount-negative' => $customer['remaining_kg'] < 0])>{{ number_format($customer['remaining_kg'], 3) }}</td>
+                    </tr>
+                @empty
+                    <tr><td colspan="2">{{ __('No customers found.') }}</td></tr>
+                @endforelse
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="card">
+        <h2 style="margin-top:0">{{ __('Top 5 Remaining JOD Customers') }}</h2>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>{{ __('Customer') }}</th><th>{{ __('Remaining Balance JOD') }}</th></tr></thead>
+                <tbody>
+                @forelse ($topCustomerJodBalances as $customer)
+                    <tr>
+                        <td><a href="{{ route('customers.show', $customer['id']) }}">{{ $customer['name'] }}</a></td>
+                        <td @class(['amount-positive' => $customer['remaining_jod'] >= 0, 'amount-negative' => $customer['remaining_jod'] < 0])>{{ number_format($customer['remaining_jod'], 3) }}</td>
+                    </tr>
+                @empty
+                    <tr><td colspan="2">{{ __('No customers found.') }}</td></tr>
+                @endforelse
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
 @if (auth()->user()?->canViewFinancialReports())
 <div class="section-title">
     <h2>{{ __('Monthly Performance') }}</h2>
