@@ -55,6 +55,9 @@
         th, td { padding:9px 10px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
         html[dir="rtl"] th, html[dir="rtl"] td { text-align:right; }
         th { background:#f0f4f2; color:#44504a; font-size:12px; font-weight:bold; white-space:nowrap; }
+        .table-sort { display:inline-flex; align-items:center; gap:5px; width:100%; padding:0; border:0; background:transparent; color:inherit; font:inherit; text-align:inherit; cursor:pointer; }
+        .table-sort:hover { background:transparent; color:var(--accent-strong); }
+        .table-sort span { color:var(--muted); font-size:11px; }
         tr:hover td { background:#fbfdfc; }
         .statement-table { table-layout:fixed; }
         .statement-table .description-cell, .statement-table .notes-cell { font-size:12px; line-height:1.35; overflow-wrap:anywhere; word-break:break-word; white-space:normal; }
