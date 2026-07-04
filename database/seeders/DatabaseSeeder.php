@@ -8,6 +8,7 @@ use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
 
 class DatabaseSeeder extends Seeder
 {
@@ -18,10 +19,17 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+        if ($password = env('APICO_SEED_ADMIN_PASSWORD')) {
+            User::updateOrCreate(
+                ['email' => env('APICO_SEED_ADMIN_EMAIL', 'test@example.com')],
+                [
+                    'name' => env('APICO_SEED_ADMIN_NAME', 'APICO Admin'),
+                    'password' => Hash::make($password),
+                    'role' => 'admin',
+                    'is_active' => true,
+                ]
+            );
+        }
 
         Customer::firstOrCreate(
             ['name' => 'Sample Customer'],
