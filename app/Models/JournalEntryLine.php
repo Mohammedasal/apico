@@ -43,6 +43,11 @@ class JournalEntryLine extends Model
         return $this->belongsTo(Material::class);
     }
 
+    public function employee(): BelongsTo
+    {
+        return $this->belongsTo(Employee::class);
+    }
+
     public function bankAccount(): BelongsTo
     {
         return $this->belongsTo(BankAccount::class);

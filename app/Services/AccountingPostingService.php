@@ -8,6 +8,7 @@ use App\Models\ChartOfAccount;
 use App\Models\ExpenseVoucher;
 use App\Models\JournalEntry;
 use App\Models\Payment;
+use App\Models\PayrollRun;
 use App\Models\RecycleIn;
 use App\Models\RecycleOut;
 use App\Models\Setting;
@@ -142,6 +143,112 @@ class AccountingPostingService
     public function reverseExpenseVoucher(ExpenseVoucher $voucher, ?User $user = null): Collection
     {
         return DB::transaction(fn () => $this->activeSourceEntries($voucher, 'accounting')
+            ->map(fn (JournalEntry $entry) => $this->reverse($entry, $user)));
+    }
+
+    public function postPayrollAccrual(PayrollRun $payroll, ?User $user = null): JournalEntry
+    {
+        return DB::transaction(function () use ($payroll, $user) {
+            $existing = $this->activeSourceEntries($payroll, 'accounting')
+                ->where('posting_type', 'payroll_accrual')
+                ->first();
+
+            if ($existing) {
+                return $existing->load('lines.account');
+            }
+
+            $payroll->loadMissing('lines.employee');
+            if ($payroll->lines->isEmpty()) {
+                throw ValidationException::withMessages(['lines' => 'Payroll run requires at least one employee line.']);
+            }
+
+            $salaryExpense = $this->mappedAccount('salary_expense');
+            $salaryPayable = $this->mappedAccount('salary_payable');
+            $socialExpense = $this->mappedAccount('social_security_expense');
+            $socialPayable = $this->mappedAccount('social_security_payable');
+            $lines = [];
+
+            foreach ($payroll->lines as $payrollLine) {
+                $grossExpense = round((float) $payrollLine->gross_salary + (float) $payrollLine->allowances, 3);
+                $deductions = round((float) $payrollLine->deductions, 3);
+                $employerSocial = round((float) $payrollLine->employer_social_security, 3);
+                $net = round((float) $payrollLine->net_salary, 3);
+
+                $lines[] = $this->line($salaryExpense->id, $grossExpense, 0, employeeId: $payrollLine->employee_id);
+                if ($employerSocial > 0) {
+                    $lines[] = $this->line($socialExpense->id, $employerSocial, 0, employeeId: $payrollLine->employee_id);
+                }
+                $lines[] = $this->line($salaryPayable->id, 0, $net, employeeId: $payrollLine->employee_id);
+                if (($deductions + $employerSocial) > 0) {
+                    $lines[] = $this->line($socialPayable->id, 0, $deductions + $employerSocial, employeeId: $payrollLine->employee_id);
+                }
+            }
+
+            return $this->createPostedEntry([
+                'entry_date' => $payroll->payroll_date->toDateString(),
+                'memo_en' => 'Payroll accrual '.$payroll->period_year.'-'.str_pad((string) $payroll->period_month, 2, '0', STR_PAD_LEFT),
+                'memo_ar' => 'استحقاق رواتب '.$payroll->period_year.'-'.str_pad((string) $payroll->period_month, 2, '0', STR_PAD_LEFT),
+                'source_module' => 'accounting',
+                'source_type' => class_basename($payroll),
+                'source_id' => $payroll->id,
+                'posting_type' => 'payroll_accrual',
+                'is_auto' => true,
+            ], $lines, $user);
+        });
+    }
+
+    public function postPayrollPayment(PayrollRun $payroll, ?User $user = null): JournalEntry
+    {
+        return DB::transaction(function () use ($payroll, $user) {
+            $existing = $this->activeSourceEntries($payroll, 'accounting')
+                ->where('posting_type', 'payroll_payment')
+                ->first();
+
+            if ($existing) {
+                return $existing->load('lines.account');
+            }
+
+            if (! $payroll->payment_date || ! in_array($payroll->payment_type, ['cash', 'bank_transfer'], true)) {
+                throw ValidationException::withMessages(['payment_type' => 'Payroll payment requires a payment date and cash or bank payment type.']);
+            }
+
+            $payroll->loadMissing(['lines', 'cashAccount.chartAccount', 'bankAccount.chartAccount']);
+            $salaryPayable = $this->mappedAccount('salary_payable');
+            $settlement = $payroll->payment_type === 'cash'
+                ? ($payroll->cashAccount?->chartAccount ?? $this->mappedAccount('cash_default'))
+                : ($payroll->bankAccount?->chartAccount ?? $this->mappedAccount('bank_default'));
+            $lines = $payroll->lines->map(
+                fn ($payrollLine) => $this->line(
+                    $salaryPayable->id,
+                    (float) $payrollLine->net_salary,
+                    0,
+                    employeeId: $payrollLine->employee_id
+                )
+            )->all();
+            $lines[] = $this->line(
+                $settlement->id,
+                0,
+                (float) $payroll->total_net,
+                bankAccountId: $payroll->bank_account_id,
+                cashAccountId: $payroll->cash_account_id
+            );
+
+            return $this->createPostedEntry([
+                'entry_date' => $payroll->payment_date->toDateString(),
+                'memo_en' => 'Payroll payment '.$payroll->period_year.'-'.str_pad((string) $payroll->period_month, 2, '0', STR_PAD_LEFT),
+                'memo_ar' => 'دفع رواتب '.$payroll->period_year.'-'.str_pad((string) $payroll->period_month, 2, '0', STR_PAD_LEFT),
+                'source_module' => 'accounting',
+                'source_type' => class_basename($payroll),
+                'source_id' => $payroll->id,
+                'posting_type' => 'payroll_payment',
+                'is_auto' => true,
+            ], $lines, $user);
+        });
+    }
+
+    public function reversePayrollRun(PayrollRun $payroll, ?User $user = null): Collection
+    {
+        return DB::transaction(fn () => $this->activeSourceEntries($payroll, 'accounting')
             ->map(fn (JournalEntry $entry) => $this->reverse($entry, $user)));
     }
 
@@ -474,6 +581,7 @@ class AccountingPostingService
         ?int $customerId = null,
         ?int $supplierId = null,
         ?int $materialId = null,
+        ?int $employeeId = null,
         ?int $bankAccountId = null,
         ?int $cashAccountId = null,
     ): array {
@@ -484,6 +592,7 @@ class AccountingPostingService
             'customer_id' => $customerId,
             'supplier_id' => $supplierId,
             'material_id' => $materialId,
+            'employee_id' => $employeeId,
             'bank_account_id' => $bankAccountId,
             'cash_account_id' => $cashAccountId,
         ];
