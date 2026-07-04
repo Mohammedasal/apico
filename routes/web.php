@@ -37,7 +37,7 @@ Route::middleware('auth')->group(function () {
         ->name('imports.production-sheet.store');
 
     Route::get('/production', [ProductionController::class, 'index'])
-        ->middleware('role:admin,viewer')
+        ->middleware('role:admin')
         ->name('production.index');
     Route::post('/production/days', [ProductionController::class, 'saveDays'])
         ->middleware('role:admin')
@@ -46,11 +46,11 @@ Route::middleware('auth')->group(function () {
         ->middleware('role:admin')
         ->name('production.expenses.store');
 
-    Route::get('/cheques-out', [ChequeOutController::class, 'index'])->name('cheques-out.index');
+    Route::get('/cheques-out', [ChequeOutController::class, 'index'])->middleware('role:admin,data_entry')->name('cheques-out.index');
     Route::post('/cheques-out', [ChequeOutController::class, 'store'])->middleware('role:admin,data_entry')->name('cheques-out.store');
     Route::get('/cheques-out/{chequeOut}/edit', [ChequeOutController::class, 'edit'])->middleware('role:admin,data_entry')->name('cheques-out.edit');
     Route::put('/cheques-out/{chequeOut}', [ChequeOutController::class, 'update'])->middleware('role:admin,data_entry')->name('cheques-out.update');
-    Route::get('/cheques-in', [ChequeInController::class, 'index'])->name('cheques-in.index');
+    Route::get('/cheques-in', [ChequeInController::class, 'index'])->middleware('role:admin,data_entry')->name('cheques-in.index');
     Route::put('/cheques-in/{payment}', [ChequeInController::class, 'update'])->middleware('role:admin,data_entry')->name('cheques-in.update');
 
     Route::get('/customers/{customer}/export', [CustomerController::class, 'export'])->middleware('role:admin,viewer')->name('customers.export');
@@ -76,16 +76,16 @@ Route::middleware('auth')->group(function () {
         });
 
     Route::middleware('role:admin,viewer')->group(function () {
-        Route::get('/reports/monthly', [ReportController::class, 'monthly'])->name('reports.monthly');
-        Route::get('/reports/monthly/export', [ReportController::class, 'monthlyExport'])->name('reports.monthly.export');
         Route::get('/reports/customer-statement/{customer}', [ReportController::class, 'customerStatement'])->name('reports.customer-statement');
-        Route::get('/reports/stock-profit', [ReportController::class, 'stockProfit'])->name('reports.stock-profit');
-        Route::get('/reports/stock-profit/export', [ReportController::class, 'stockProfitExport'])->name('reports.stock-profit.export');
         Route::get('/reports/alerts', [ReportController::class, 'alerts'])->name('reports.alerts');
         Route::get('/reports/alerts/export', [ReportController::class, 'alertsExport'])->name('reports.alerts.export');
     });
 
     Route::middleware('role:admin')->group(function () {
+        Route::get('/reports/monthly', [ReportController::class, 'monthly'])->name('reports.monthly');
+        Route::get('/reports/monthly/export', [ReportController::class, 'monthlyExport'])->name('reports.monthly.export');
+        Route::get('/reports/stock-profit', [ReportController::class, 'stockProfit'])->name('reports.stock-profit');
+        Route::get('/reports/stock-profit/export', [ReportController::class, 'stockProfitExport'])->name('reports.stock-profit.export');
         Route::get('/settings', [SettingController::class, 'index'])->name('settings.index');
         Route::put('/settings', [SettingController::class, 'update'])->name('settings.update');
         Route::resource('users', UserController::class)->except(['show', 'destroy']);

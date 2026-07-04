@@ -4,6 +4,28 @@
 
 @section('content')
 <h1>{{ $isEdit ? __('Edit :item', ['item' => __($config['title'])]) : __('New :item', ['item' => __($config['title'])]) }}</h1>
+@if (! $isEdit && filled($recentRecord))
+    <div class="card" style="margin-bottom:16px">
+        <strong>{{ __('Last added') }}</strong>
+        <span style="margin-inline-start:12px">{{ $recentRecord->date?->format('Y-m-d') }}</span>
+        @if ($module === 'stock-purchases')
+            <span> | {{ $recentRecord->supplier?->name ?? $recentRecord->supplier_name }}</span>
+        @else
+            <span> | {{ $recentRecord->customer?->name }}</span>
+        @endif
+        @if ($module === 'payments')
+            <span> | {{ number_format((float) $recentRecord->amount, 3) }} JOD</span>
+        @elseif ($module === 'recycle-out')
+            <span> | {{ number_format((float) $recentRecord->weight_kg, 3) }} kg | {{ number_format((float) $recentRecord->total_amount, 3) }} JOD</span>
+        @elseif ($module === 'stock-purchases')
+            <span> | {{ number_format((float) $recentRecord->weight_kg, 3) }} kg | {{ number_format((float) $recentRecord->total_cost, 3) }} JOD</span>
+        @elseif ($module === 'stock-sales')
+            <span> | {{ number_format((float) $recentRecord->weight_kg, 3) }} kg | {{ number_format((float) $recentRecord->sales_value, 3) }} JOD</span>
+        @else
+            <span> | {{ number_format((float) $recentRecord->weight_kg, 3) }} kg</span>
+        @endif
+    </div>
+@endif
 <form method="post" action="{{ $isEdit ? route('operations.update', [$module, $record->id]) : route('operations.store', $module) }}">
     @csrf
     @if ($isEdit) @method('put') @endif
@@ -37,13 +59,51 @@
         @elseif ($module === 'stock-purchases')
             <div><label>{{ __('Cost/Kg') }}</label><input type="number" step="0.001" name="cost_per_kg" value="{{ old('cost_per_kg', $record?->cost_per_kg) }}">@error('cost_per_kg')<div class="error">{{ $message }}</div>@enderror</div>
         @elseif ($module === 'stock-sales')
-            <div><label>{{ __('Selling Price/Kg') }}</label><input type="number" step="0.001" name="selling_price_per_kg" value="{{ old('selling_price_per_kg', $record?->selling_price_per_kg) }}">@error('selling_price_per_kg')<div class="error">{{ $message }}</div>@enderror</div>
-            <div><label>{{ __('Purchase Cost/Kg') }}</label><input type="number" step="0.001" name="purchase_cost_per_kg" value="{{ old('purchase_cost_per_kg', $record?->purchase_cost_per_kg ?? 0) }}"></div>
-            <div><label>{{ __('Granulation Cost/Kg') }}</label><input type="number" step="0.001" name="granulation_cost_per_kg" value="{{ old('granulation_cost_per_kg', $record?->granulation_cost_per_kg ?? 0) }}"></div>
+            <input type="hidden" name="price_input_mode" id="price_input_mode" value="{{ old('price_input_mode', 'rate') }}">
+            <div><label>{{ __('Selling Price/Kg') }}</label><input id="stock_sale_rate" type="number" step="0.000001" name="selling_price_per_kg" value="{{ old('selling_price_per_kg', $record?->selling_price_per_kg) }}">@error('selling_price_per_kg')<div class="error">{{ $message }}</div>@enderror</div>
+            <div><label>{{ __('Total Price') }}</label><input id="stock_sale_total" type="number" step="0.001" name="sales_value" value="{{ old('sales_value', $record?->sales_value) }}">@error('sales_value')<div class="error">{{ $message }}</div>@enderror</div>
             <div><label>{{ __('Admin Override') }}</label><select name="admin_override"><option value="0">{{ __('No') }}</option><option value="1">{{ __('Yes') }}</option></select></div>
         @endif
         <div style="grid-column:1/-1"><label>{{ __('Notes') }}</label><textarea name="notes">{{ old('notes', $record?->notes) }}</textarea>@error('notes')<div class="error">{{ $message }}</div>@enderror</div>
     </div>
     <p><button>{{ __('Save') }}</button></p>
 </form>
+@if ($module === 'stock-sales')
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const weight = document.querySelector('input[name="weight_kg"]');
+    const rate = document.getElementById('stock_sale_rate');
+    const total = document.getElementById('stock_sale_total');
+    const mode = document.getElementById('price_input_mode');
+
+    function calculateFromRate() {
+        const weightValue = Number.parseFloat(weight.value);
+        const rateValue = Number.parseFloat(rate.value);
+        total.value = Number.isFinite(weightValue) && Number.isFinite(rateValue)
+            ? (weightValue * rateValue).toFixed(3)
+            : '';
+    }
+
+    function calculateFromTotal() {
+        const weightValue = Number.parseFloat(weight.value);
+        const totalValue = Number.parseFloat(total.value);
+        rate.value = Number.isFinite(weightValue) && weightValue > 0 && Number.isFinite(totalValue)
+            ? (totalValue / weightValue).toFixed(6)
+            : '';
+    }
+
+    rate.addEventListener('input', function () {
+        mode.value = 'rate';
+        calculateFromRate();
+    });
+    total.addEventListener('input', function () {
+        mode.value = 'total';
+        calculateFromTotal();
+    });
+    weight.addEventListener('input', function () {
+        mode.value === 'total' ? calculateFromTotal() : calculateFromRate();
+    });
+});
+</script>
+@endif
 @endsection

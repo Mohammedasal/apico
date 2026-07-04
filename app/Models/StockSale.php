@@ -11,7 +11,7 @@ class StockSale extends Model
 
     protected function casts(): array
     {
-        return ['date' => 'date', 'weight_kg' => 'decimal:3', 'selling_price_per_kg' => 'decimal:3', 'sales_value' => 'decimal:3', 'purchase_cost_per_kg' => 'decimal:3', 'granulation_cost_per_kg' => 'decimal:3', 'net_profit' => 'decimal:3'];
+        return ['date' => 'date', 'weight_kg' => 'decimal:3', 'selling_price_per_kg' => 'decimal:6', 'sales_value' => 'decimal:3', 'purchase_cost_per_kg' => 'decimal:3', 'granulation_cost_per_kg' => 'decimal:3', 'net_profit' => 'decimal:3'];
     }
 
     public function customer(): BelongsTo { return $this->belongsTo(Customer::class); }

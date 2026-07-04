@@ -7,6 +7,7 @@ use App\Models\Material;
 use App\Models\RecycleIn;
 use App\Models\RecycleOut;
 use App\Models\StockPurchase;
+use App\Models\StockSale;
 use App\Models\Supplier;
 use App\Models\SupplierPayment;
 use App\Models\User;
@@ -228,11 +229,83 @@ class OperationValidationTest extends TestCase
             'material_id' => $material->id,
             'weight_kg' => 6,
             'selling_price_per_kg' => 2,
-            'purchase_cost_per_kg' => 1,
-            'granulation_cost_per_kg' => 0,
         ]);
 
         $response->assertSessionHasErrors('weight_kg');
+    }
+
+    public function test_stock_sale_uses_weighted_average_purchase_cost_and_returns_to_create_form(): void
+    {
+        $customer = Customer::create(['name' => 'Customer', 'status' => 'active']);
+        $material = Material::create(['name' => 'PET', 'type' => 'stock', 'is_active' => true]);
+        StockPurchase::create(['date' => '2026-01-01', 'supplier_name' => 'A', 'material_id' => $material->id, 'weight_kg' => 40000, 'cost_per_kg' => 0.2, 'total_cost' => 8000]);
+        StockPurchase::create(['date' => '2026-01-02', 'supplier_name' => 'B', 'material_id' => $material->id, 'weight_kg' => 20000, 'cost_per_kg' => 0.5, 'total_cost' => 10000]);
+
+        $response = $this->post(route('operations.store', 'stock-sales'), [
+            'date' => '2026-01-03',
+            'customer_id' => $customer->id,
+            'material_id' => $material->id,
+            'weight_kg' => 1000,
+            'selling_price_per_kg' => 0.6,
+        ]);
+
+        $sale = StockSale::firstOrFail();
+        $response->assertRedirect(route('operations.create', 'stock-sales'));
+        $this->assertSame(0.3, (float) $sale->purchase_cost_per_kg);
+        $this->assertSame(600.0, (float) $sale->sales_value);
+        $this->assertSame(300.0, (float) $sale->net_profit);
+    }
+
+    public function test_stock_sale_calculates_total_from_weight_and_rate(): void
+    {
+        $customer = Customer::create(['name' => 'Customer', 'status' => 'active']);
+        StockPurchase::create(['date' => '2026-01-01', 'supplier_name' => 'Supplier', 'weight_kg' => 10000, 'cost_per_kg' => 0.2, 'total_cost' => 2000]);
+
+        $response = $this->post(route('operations.store', 'stock-sales'), [
+            'date' => '2026-01-02',
+            'customer_id' => $customer->id,
+            'weight_kg' => 1390,
+            'selling_price_per_kg' => 0.12,
+            'price_input_mode' => 'rate',
+        ]);
+
+        $response->assertSessionHasNoErrors();
+        $this->assertSame(166.8, (float) StockSale::firstOrFail()->sales_value);
+    }
+
+    public function test_stock_sale_calculates_rate_from_weight_and_exact_total(): void
+    {
+        $customer = Customer::create(['name' => 'Customer', 'status' => 'active']);
+        StockPurchase::create(['date' => '2026-01-01', 'supplier_name' => 'Supplier', 'weight_kg' => 10000, 'cost_per_kg' => 0.2, 'total_cost' => 2000]);
+
+        $response = $this->post(route('operations.store', 'stock-sales'), [
+            'date' => '2026-01-02',
+            'customer_id' => $customer->id,
+            'weight_kg' => 1390,
+            'sales_value' => 170,
+            'price_input_mode' => 'total',
+        ]);
+
+        $response->assertSessionHasNoErrors();
+        $sale = StockSale::firstOrFail();
+        $this->assertSame(170.0, (float) $sale->sales_value);
+        $this->assertSame(0.122302, (float) $sale->selling_price_per_kg);
+    }
+
+    public function test_recycle_in_returns_to_create_form_and_shows_last_added_record(): void
+    {
+        $customer = Customer::create(['name' => 'Customer', 'status' => 'active']);
+
+        $response = $this->post(route('operations.store', 'recycle-in'), [
+            'date' => '2026-01-01',
+            'customer_id' => $customer->id,
+            'weight_kg' => 125,
+        ]);
+
+        $response->assertRedirect(route('operations.create', 'recycle-in'));
+        $response = $this->followRedirects($response);
+        $response->assertSee('Last added');
+        $response->assertSee('125.000');
     }
 
     public function test_supplier_cheque_payments_are_visible_on_cheques_out_page(): void

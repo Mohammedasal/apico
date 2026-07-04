@@ -43,7 +43,7 @@
         <span class="action-mark mark-pay">SUP</span>
         <span><strong>{{ __('Supplier Payment') }}</strong><span>{{ __('Pay stock suppliers') }}</span></span>
     </a>
-    @if (auth()->user()?->canViewFinancialReports())
+    @if (auth()->user()?->canViewProfitAndLoss())
         <a class="quick-action" href="{{ route('production.index') }}">
             <span class="action-mark mark-out">P&L</span>
             <span><strong>{{ __('Production') }}</strong><span>{{ __('Daily production and costs') }}</span></span>
@@ -104,11 +104,11 @@
     <div class="card kpi-card"><div class="muted">{{ __('Recycle In Kg') }}</div><div class="kpi">{{ number_format($recycleInKg, 3) }}</div><a href="{{ route('operations.index', 'recycle-in') }}">{{ __('View in') }}</a></div>
     <div class="card kpi-card"><div class="muted">{{ __('Recycle Out Kg') }}</div><div class="kpi">{{ number_format($recycleOutKg, 3) }}</div><a href="{{ route('operations.index', 'recycle-out') }}">{{ __('View out') }}</a></div>
     <div class="card kpi-card"><div class="muted">{{ __('Daily Production Avg') }}</div><div class="kpi">{{ number_format($dailyProductionAverage, 3) }}</div><div class="muted">{{ $productionDays }} {{ __('production days') }}</div></div>
-    <div class="card kpi-card"><div class="muted">{{ __('Waste Kg') }}</div><div class="kpi">{{ number_format($wasteKg, 3) }}</div>@if (auth()->user()?->canViewFinancialReports())<a href="{{ route('reports.monthly') }}">{{ __('Monthly report') }}</a>@endif</div>
+    <div class="card kpi-card"><div class="muted">{{ __('Waste Kg') }}</div><div class="kpi">{{ number_format($wasteKg, 3) }}</div>@if (auth()->user()?->canViewProfitAndLoss())<a href="{{ route('reports.monthly') }}">{{ __('Monthly report') }}</a>@endif</div>
     <div class="card kpi-card"><div class="muted">{{ __('Waste % of Out') }}</div><div class="kpi">{{ number_format($wastePercentage, 2) }}%</div><div class="muted">{{ __('Waste / total out') }}</div></div>
     <div class="card kpi-card"><div class="muted">{{ __('Payments JOD') }}</div><div class="kpi">{{ number_format($payments, 3) }}</div><a href="{{ route('operations.index', 'payments') }}">{{ __('View payments') }}</a></div>
     <div class="card kpi-card"><div class="muted">{{ __('Debts / Receivables JOD') }}</div><div class="kpi">{{ number_format($receivables, 3) }}</div><div class="muted">{{ __('Remaining customer balances') }}</div></div>
-    @if (auth()->user()?->canViewFinancialReports())
+    @if (auth()->user()?->canViewProfitAndLoss())
         <div class="card kpi-card">
             <div class="muted">{{ __('Actual Cost / Ton JOD') }}</div>
             <div class="kpi">{{ number_format($actualCostPerTon, 3) }}</div>
@@ -168,7 +168,7 @@
     </div>
 </div>
 
-@if (auth()->user()?->canViewFinancialReports())
+@if (auth()->user()?->canViewProfitAndLoss())
 <div class="section-title">
     <h2>{{ __('Monthly Performance') }}</h2>
     <form class="filters" method="get" style="padding:0;border:0;background:transparent">
@@ -190,10 +190,10 @@
     <canvas id="summaryChart" height="90"></canvas>
 </div>
 @php
-    $chartLabels = auth()->user()?->canViewFinancialReports()
+    $chartLabels = auth()->user()?->canViewProfitAndLoss()
         ? [__('Recycle In Kg'), __('Recycle Out Kg'), __('Production Kg'), __('Waste Kg'), __('Payments'), __('Stock Profit'), __('Actual P&L')]
         : [__('Recycle In Kg'), __('Recycle Out Kg'), __('Production Kg'), __('Waste Kg'), __('Payments')];
-    $chartData = auth()->user()?->canViewFinancialReports()
+    $chartData = auth()->user()?->canViewProfitAndLoss()
         ? [$recycleInKg, $recycleOutKg, $productionKg, $wasteKg, $payments, $stockProfit, $actualFactoryProfitLoss]
         : [$recycleInKg, $recycleOutKg, $productionKg, $wasteKg, $payments];
 @endphp
@@ -210,7 +210,7 @@ new Chart(document.getElementById('summaryChart'), {
     }
 });
 
-@if (auth()->user()?->canViewFinancialReports())
+@if (auth()->user()?->canViewProfitAndLoss())
 const monthlyPerformance = @json($monthlyPerformance);
 new Chart(document.getElementById('monthlyPerformanceChart'), {
     data: {

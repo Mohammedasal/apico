@@ -342,6 +342,8 @@
     "User created.": "تم إنشاء المستخدم.",
     "User updated.": "تم تحديث المستخدم.",
     "Sales sheet imported. Existing imported transactions were flushed first.": "تم استيراد ملف المبيعات بعد حذف الحركات المستوردة السابقة.",
+    "Last added": "آخر حركة مضافة",
+    "Total Price": "السعر الإجمالي",
     ":item saved.": "تم حفظ :item.",
     ":item updated.": "تم تحديث :item.",
     "Enter recycled out, waste, or non-recycled weight.": "أدخل وزن المدور أو الفاقد أو غير المدور.",

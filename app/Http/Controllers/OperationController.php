@@ -53,6 +53,13 @@ class OperationController extends Controller
 
     public function create(string $module)
     {
+        $recentRecord = null;
+        $recentId = session("recent_operation.{$module}");
+
+        if ($recentId) {
+            $recentRecord = $this->module($module)['model']::with($this->relations($module))->find($recentId);
+        }
+
         return view('operations.form', [
             'module' => $module,
             'config' => $this->module($module),
@@ -60,6 +67,7 @@ class OperationController extends Controller
             'customers' => Customer::orderBy('name')->get(),
             'suppliers' => Supplier::where('status', 'active')->orderBy('name')->get(),
             'materials' => Material::where('is_active', true)->orderBy('name')->get(),
+            'recentRecord' => $recentRecord,
         ]);
     }
 
@@ -67,9 +75,12 @@ class OperationController extends Controller
     {
         $data = $this->validated($module, $request, $calculator);
         $data['created_by'] = $request->user()->id;
-        $this->module($module)['model']::create($data);
+        $record = $this->module($module)['model']::create($data);
 
-        return redirect()->route('operations.index', $module)->with('status', __(':item saved.', ['item' => __($this->module($module)['title'])]));
+        return redirect()
+            ->route('operations.create', $module)
+            ->with("recent_operation.{$module}", $record->id)
+            ->with('status', __(':item saved.', ['item' => __($this->module($module)['title'])]));
     }
 
     public function edit(string $module, int $id)
@@ -81,6 +92,7 @@ class OperationController extends Controller
             'customers' => Customer::orderBy('name')->get(),
             'suppliers' => Supplier::orderBy('name')->get(),
             'materials' => Material::where('is_active', true)->orderBy('name')->get(),
+            'recentRecord' => null,
         ]);
     }
 
@@ -167,9 +179,9 @@ class OperationController extends Controller
                 'customer_id' => ['required', 'exists:customers,id'],
                 'material_id' => ['nullable', 'exists:materials,id'],
                 'weight_kg' => ['required', 'numeric', 'gt:0'],
-                'selling_price_per_kg' => ['required', 'numeric', 'min:0'],
-                'purchase_cost_per_kg' => ['required', 'numeric', 'min:0'],
-                'granulation_cost_per_kg' => ['nullable', 'numeric', 'min:0'],
+                'selling_price_per_kg' => ['nullable', 'required_without:sales_value', 'numeric', 'min:0'],
+                'sales_value' => ['nullable', 'required_without:selling_price_per_kg', 'numeric', 'min:0'],
+                'price_input_mode' => ['nullable', 'in:rate,total'],
                 'notes' => ['nullable', 'string'],
                 'admin_override' => ['sometimes', 'boolean'],
             ]),
@@ -244,7 +256,18 @@ class OperationController extends Controller
         }
 
         if ($module === 'stock-sales') {
-            if ((float) $data['selling_price_per_kg'] === 0.0 && blank($data['notes'] ?? null)) {
+            $weightKg = (float) $data['weight_kg'];
+            $inputMode = $data['price_input_mode'] ?? 'rate';
+
+            if ($inputMode === 'total' && filled($data['sales_value'] ?? null)) {
+                $data['sales_value'] = round((float) $data['sales_value'], 3);
+                $data['selling_price_per_kg'] = round($data['sales_value'] / $weightKg, 6);
+            } else {
+                $data['selling_price_per_kg'] = round((float) $data['selling_price_per_kg'], 6);
+                $data['sales_value'] = $calculator->recycleTotal($weightKg, $data['selling_price_per_kg']);
+            }
+
+            if ((float) $data['sales_value'] === 0.0 && blank($data['notes'] ?? null)) {
                 throw ValidationException::withMessages(['notes' => 'A note is required when selling price is zero.']);
             }
 
@@ -256,16 +279,15 @@ class OperationController extends Controller
                 throw ValidationException::withMessages(['weight_kg' => 'Stock sale exceeds available stock. Enable admin override in settings to allow it.']);
             }
 
-            $values = $calculator->stockSaleValues(
-                (float) $data['weight_kg'],
-                (float) $data['selling_price_per_kg'],
-                (float) $data['purchase_cost_per_kg'],
-                (float) ($data['granulation_cost_per_kg'] ?? 0)
+            $purchaseCost = $calculator->weightedAverageStockCost(
+                filled($data['material_id'] ?? null) ? (int) $data['material_id'] : null,
+                $data['date'],
+                $ignoreId
             );
-
-            $data['sales_value'] = $values['sales_value'];
-            $data['net_profit'] = $values['net_profit'];
-            unset($data['admin_override']);
+            $data['purchase_cost_per_kg'] = $purchaseCost;
+            $data['granulation_cost_per_kg'] = 0;
+            $data['net_profit'] = round($data['sales_value'] - ($weightKg * $purchaseCost), 3);
+            unset($data['admin_override'], $data['price_input_mode']);
         }
 
         return $data;

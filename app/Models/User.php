@@ -47,6 +47,11 @@ class User extends Authenticatable
         return in_array($this->role, ['admin', 'viewer'], true);
     }
 
+    public function canViewProfitAndLoss(): bool
+    {
+        return $this->role === 'admin';
+    }
+
     public function canManageSystem(): bool
     {
         return $this->role === 'admin';

@@ -62,7 +62,11 @@
                 @elseif (isset($record->total_amount)) {{ number_format($record->total_amount, 3) }}
                 @elseif (isset($record->amount)) {{ number_format($record->amount, 3) }}
                 @elseif (isset($record->total_cost)) {{ number_format($record->total_cost, 3) }}
-                    @else {{ number_format($record->sales_value, 3) }} / {{ __('profit') }} {{ number_format($record->net_profit, 3) }}
+                    @else
+                        {{ number_format($record->sales_value, 3) }}
+                        @if (auth()->user()?->canViewProfitAndLoss())
+                            / {{ __('profit') }} {{ number_format($record->net_profit, 3) }}
+                        @endif
                 @endif
             </td>
             @if ($module === 'payments')

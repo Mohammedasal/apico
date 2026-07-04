@@ -104,6 +104,29 @@ class ApicoCalculatorTest extends TestCase
         $this->assertSame(80.0, $calculator->remainingStockWeight($material->id));
     }
 
+    public function test_weighted_average_stock_cost_uses_all_purchase_weight_and_value(): void
+    {
+        $calculator = app(ApicoCalculator::class);
+        $material = Material::create(['name' => 'HDPE', 'type' => 'stock', 'is_active' => true]);
+
+        StockPurchase::create(['date' => '2026-01-01', 'supplier_name' => 'A', 'material_id' => $material->id, 'weight_kg' => 40000, 'cost_per_kg' => 0.2, 'total_cost' => 8000]);
+        StockPurchase::create(['date' => '2026-01-02', 'supplier_name' => 'B', 'material_id' => $material->id, 'weight_kg' => 20000, 'cost_per_kg' => 0.5, 'total_cost' => 10000]);
+
+        $this->assertSame(0.3, $calculator->weightedAverageStockCost($material->id, '2026-01-03'));
+    }
+
+    public function test_weighted_average_stock_cost_only_values_remaining_inventory(): void
+    {
+        $calculator = app(ApicoCalculator::class);
+        $customer = Customer::create(['name' => 'Buyer', 'status' => 'active']);
+        $material = Material::create(['name' => 'PET', 'type' => 'stock', 'is_active' => true]);
+        StockPurchase::create(['date' => '2026-01-01', 'supplier_name' => 'A', 'material_id' => $material->id, 'weight_kg' => 100, 'cost_per_kg' => 1, 'total_cost' => 100]);
+        StockSale::create(['date' => '2026-01-02', 'customer_id' => $customer->id, 'material_id' => $material->id, 'weight_kg' => 50, 'selling_price_per_kg' => 2, 'sales_value' => 100, 'purchase_cost_per_kg' => 1, 'granulation_cost_per_kg' => 0, 'net_profit' => 50]);
+        StockPurchase::create(['date' => '2026-01-03', 'supplier_name' => 'B', 'material_id' => $material->id, 'weight_kg' => 100, 'cost_per_kg' => 3, 'total_cost' => 300]);
+
+        $this->assertSame(2.333333, $calculator->weightedAverageStockCost($material->id, '2026-01-04'));
+    }
+
     public function test_stock_profit_summary_subtracts_weighted_average_cogs_and_conversion_cost(): void
     {
         $calculator = app(ApicoCalculator::class);

@@ -22,7 +22,7 @@ class ApicoCalculator
         return round($weightKg * $ratePerKg, 3);
     }
 
-    public function stockSaleValues(float $weightKg, float $sellingPrice, float $purchaseCost, float $granulationCost): array
+    public function stockSaleValues(float $weightKg, float $sellingPrice, float $purchaseCost, float $granulationCost = 0): array
     {
         $salesValue = round($weightKg * $sellingPrice, 3);
         $purchaseCostValue = round($weightKg * $purchaseCost, 3);
@@ -34,6 +34,51 @@ class ApicoCalculator
             'granulation_cost_value' => $granulationCostValue,
             'net_profit' => round($salesValue - $purchaseCostValue - $granulationCostValue, 3),
         ];
+    }
+
+    public function weightedAverageStockCost(?int $materialId = null, ?string $onDate = null, ?int $ignoreSaleId = null): float
+    {
+        $purchases = StockPurchase::query()
+            ->when($materialId, fn ($query) => $query->where('material_id', $materialId))
+            ->when($onDate, fn ($query) => $query->whereDate('date', '<=', $onDate))
+            ->get(['date', 'weight_kg', 'total_cost'])
+            ->map(fn (StockPurchase $purchase) => [
+                'type' => 'purchase',
+                'date' => $purchase->date->toDateString(),
+                'sort' => 10,
+                'weight_kg' => (float) $purchase->weight_kg,
+                'amount' => (float) $purchase->total_cost,
+            ]);
+        $sales = StockSale::query()
+            ->when($materialId, fn ($query) => $query->where('material_id', $materialId))
+            ->when($onDate, fn ($query) => $query->whereDate('date', '<=', $onDate))
+            ->when($ignoreSaleId, fn ($query) => $query->whereKeyNot($ignoreSaleId))
+            ->get(['date', 'weight_kg'])
+            ->map(fn (StockSale $sale) => [
+                'type' => 'sale',
+                'date' => $sale->date->toDateString(),
+                'sort' => 20,
+                'weight_kg' => (float) $sale->weight_kg,
+                'amount' => 0.0,
+            ]);
+
+        $inventoryKg = 0.0;
+        $inventoryValue = 0.0;
+
+        foreach ($purchases->merge($sales)->sortBy([['date', 'asc'], ['sort', 'asc']]) as $transaction) {
+            $averageCost = $inventoryKg > 0 ? $inventoryValue / $inventoryKg : 0.0;
+
+            if ($transaction['type'] === 'purchase') {
+                $inventoryKg += $transaction['weight_kg'];
+                $inventoryValue += $transaction['amount'];
+                continue;
+            }
+
+            $inventoryKg -= $transaction['weight_kg'];
+            $inventoryValue -= $transaction['weight_kg'] * $averageCost;
+        }
+
+        return $inventoryKg > 0 ? round($inventoryValue / $inventoryKg, 6) : 0.0;
     }
 
     public function remainingStockWeight(?int $materialId = null): float

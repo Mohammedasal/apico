@@ -95,6 +95,7 @@
         .pagination { display:flex; gap:6px; flex-wrap:wrap; margin-top:12px; }
         .pagination a, .pagination span { border:1px solid var(--line); background:#fff; padding:6px 9px; border-radius:6px; text-decoration:none; color:var(--ink); }
         .pagination .active span, .pagination span[aria-current] { background:var(--accent); color:#fff; border-color:var(--accent); }
+        main nav[role="navigation"] svg { display:block; width:18px; height:18px; }
         @page { size:A4 landscape; margin:8mm; }
         @media print {
             header, .topbar, form, .no-print { display:none !important; }
@@ -146,16 +147,18 @@
         <a @class(['active' => request()->routeIs('customers.*')]) href="{{ route('customers.index') }}">{{ __('Customers') }}</a>
         <a @class(['active' => request()->routeIs('suppliers.*')]) href="{{ route('suppliers.index') }}">{{ __('Suppliers') }}</a>
         <a @class(['active' => request()->routeIs('materials.*')]) href="{{ route('materials.index') }}">{{ __('Materials') }}</a>
-        @if ($currentUser?->canViewFinancialReports())
+        @if ($currentUser?->canViewProfitAndLoss())
             <div class="nav-section">{{ __('Finance') }}</div>
             <a @class(['active' => request()->routeIs('production.*')]) href="{{ route('production.index') }}">{{ __('Production / P&L') }}</a>
         @endif
-        <a @class(['active' => request()->routeIs('cheques-in.*')]) href="{{ route('cheques-in.index') }}">{{ __('Cheques In') }}</a>
-        <a @class(['active' => request()->routeIs('cheques-out.*')]) href="{{ route('cheques-out.index') }}">{{ __('Cheques Out') }}</a>
+        @if ($currentUser?->canWriteOperationalData())
+            <a @class(['active' => request()->routeIs('cheques-in.*')]) href="{{ route('cheques-in.index') }}">{{ __('Cheques In') }}</a>
+            <a @class(['active' => request()->routeIs('cheques-out.*')]) href="{{ route('cheques-out.index') }}">{{ __('Cheques Out') }}</a>
+        @endif
         <a @class(['active' => request()->routeIs('supplier-payments.*')]) href="{{ route('supplier-payments.index') }}">{{ __('Supplier Payments') }}</a>
         @if ($currentUser?->canViewFinancialReports())
             <div class="nav-section">{{ __('Review') }}</div>
-            <a @class(['active' => request()->routeIs('reports.*')]) href="{{ route('reports.monthly') }}">{{ __('Reports') }}</a>
+            <a @class(['active' => request()->routeIs('reports.*')]) href="{{ $currentUser->canViewProfitAndLoss() ? route('reports.monthly') : route('reports.alerts') }}">{{ __('Reports') }}</a>
         @endif
         @if ($currentUser?->canManageSystem())
             <div class="nav-section">{{ __('System') }}</div>
