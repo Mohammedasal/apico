@@ -20,6 +20,7 @@ use App\Http\Controllers\OperationController;
 use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\ProductionController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\SalaryAdvanceController;
 use App\Http\Controllers\SettingController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\SupplierPaymentController;
@@ -112,6 +113,8 @@ Route::middleware('auth')->group(function () {
         Route::post('/payroll/{payroll}/post', [PayrollController::class, 'post'])->name('payroll.post');
         Route::post('/payroll/{payroll}/pay', [PayrollController::class, 'pay'])->name('payroll.pay');
         Route::post('/payroll/{payroll}/cancel', [PayrollController::class, 'cancel'])->name('payroll.cancel');
+        Route::post('/payroll/{payroll}/advances', [SalaryAdvanceController::class, 'store'])->name('payroll.advances.store');
+        Route::post('/payroll/{payroll}/advances/{advance}/cancel', [SalaryAdvanceController::class, 'cancel'])->name('payroll.advances.cancel');
         Route::get('/journals', [JournalEntryController::class, 'index'])->name('journals.index');
         Route::get('/journals/create', [JournalEntryController::class, 'create'])->name('journals.create');
         Route::post('/journals', [JournalEntryController::class, 'store'])->name('journals.store');

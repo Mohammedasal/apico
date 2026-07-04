@@ -15,7 +15,7 @@
 </form>
 <div class="table-wrap">
 <table>
-    <thead><tr><th>{{ __('Period') }}</th><th>{{ __('Payroll Date') }}</th><th>{{ __('Employees') }}</th><th>{{ __('Gross') }}</th><th>{{ __('Deductions') }}</th><th>{{ __('Net Salary') }}</th><th>{{ __('Status') }}</th></tr></thead>
+    <thead><tr><th>{{ __('Period') }}</th><th>{{ __('Payroll Date') }}</th><th>{{ __('Employees') }}</th><th>{{ __('Gross') }}</th><th>{{ __('Deductions') }}</th><th>{{ __('Net Salary') }}</th><th>{{ __('Advances') }}</th><th>{{ __('Remaining') }}</th><th>{{ __('Status') }}</th></tr></thead>
     <tbody>
     @forelse ($runs as $run)
         <tr>
@@ -25,10 +25,12 @@
             <td>{{ number_format($run->total_gross + $run->total_allowances, 3) }}</td>
             <td>{{ number_format($run->total_deductions, 3) }}</td>
             <td>{{ number_format($run->total_net, 3) }}</td>
+            <td>{{ number_format($run->total_advances, 3) }}</td>
+            <td><strong>{{ number_format($run->remaining_salary, 3) }}</strong></td>
             <td>{{ __(ucfirst($run->status)) }}</td>
         </tr>
     @empty
-        <tr><td colspan="7">{{ __('No payroll runs.') }}</td></tr>
+        <tr><td colspan="9">{{ __('No payroll runs.') }}</td></tr>
     @endforelse
     </tbody>
 </table>

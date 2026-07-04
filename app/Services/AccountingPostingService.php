@@ -11,6 +11,7 @@ use App\Models\Payment;
 use App\Models\PayrollRun;
 use App\Models\RecycleIn;
 use App\Models\RecycleOut;
+use App\Models\SalaryAdvance;
 use App\Models\Setting;
 use App\Models\StockPurchase;
 use App\Models\StockSale;
@@ -212,23 +213,40 @@ class AccountingPostingService
                 throw ValidationException::withMessages(['payment_type' => 'Payroll payment requires a payment date and cash or bank payment type.']);
             }
 
-            $payroll->loadMissing(['lines', 'cashAccount.chartAccount', 'bankAccount.chartAccount']);
+            $payroll->loadMissing(['lines', 'advances', 'cashAccount.chartAccount', 'bankAccount.chartAccount']);
             $salaryPayable = $this->mappedAccount('salary_payable');
             $settlement = $payroll->payment_type === 'cash'
                 ? ($payroll->cashAccount?->chartAccount ?? $this->mappedAccount('cash_default'))
                 : ($payroll->bankAccount?->chartAccount ?? $this->mappedAccount('bank_default'));
-            $lines = $payroll->lines->map(
-                fn ($payrollLine) => $this->line(
+            $advancesByEmployee = $payroll->advances
+                ->where('status', 'posted')
+                ->groupBy('employee_id')
+                ->map(fn ($advances) => round((float) $advances->sum('amount'), 3));
+            $remainingByEmployee = $payroll->lines->mapWithKeys(
+                fn ($payrollLine) => [
+                    $payrollLine->employee_id => max(
+                        0,
+                        round((float) $payrollLine->net_salary - (float) ($advancesByEmployee[$payrollLine->employee_id] ?? 0), 3)
+                    ),
+                ]
+            );
+            $totalRemaining = round((float) $remainingByEmployee->sum(), 3);
+            if ($totalRemaining <= 0) {
+                throw ValidationException::withMessages(['amount' => 'This payroll has no remaining salary to pay.']);
+            }
+
+            $lines = $payroll->lines
+                ->filter(fn ($payrollLine) => $remainingByEmployee[$payrollLine->employee_id] > 0)
+                ->map(fn ($payrollLine) => $this->line(
                     $salaryPayable->id,
-                    (float) $payrollLine->net_salary,
+                    $remainingByEmployee[$payrollLine->employee_id],
                     0,
                     employeeId: $payrollLine->employee_id
-                )
-            )->all();
+                ))->all();
             $lines[] = $this->line(
                 $settlement->id,
                 0,
-                (float) $payroll->total_net,
+                $totalRemaining,
                 bankAccountId: $payroll->bank_account_id,
                 cashAccountId: $payroll->cash_account_id
             );
@@ -246,10 +264,64 @@ class AccountingPostingService
         });
     }
 
+    public function postSalaryAdvance(SalaryAdvance $advance, ?User $user = null): JournalEntry
+    {
+        return DB::transaction(function () use ($advance, $user) {
+            $existing = $this->activeSourceEntries($advance, 'accounting')
+                ->where('posting_type', 'salary_advance')
+                ->first();
+
+            if ($existing) {
+                return $existing->load('lines.account');
+            }
+
+            $advance->loadMissing(['employee', 'payrollRun', 'cashAccount.chartAccount', 'bankAccount.chartAccount']);
+            $salaryPayable = $this->mappedAccount('salary_payable');
+            $settlement = $advance->payment_type === 'cash'
+                ? ($advance->cashAccount?->chartAccount ?? $this->mappedAccount('cash_default'))
+                : ($advance->bankAccount?->chartAccount ?? $this->mappedAccount('bank_default'));
+
+            return $this->createPostedEntry([
+                'entry_date' => $advance->payment_date->toDateString(),
+                'memo_en' => 'Salary advance - '.$advance->employee->name_en,
+                'memo_ar' => 'سلفة راتب - '.$advance->employee->localized_name,
+                'source_module' => 'accounting',
+                'source_type' => class_basename($advance),
+                'source_id' => $advance->id,
+                'posting_type' => 'salary_advance',
+                'is_auto' => true,
+            ], [
+                $this->line($salaryPayable->id, (float) $advance->amount, 0, employeeId: $advance->employee_id),
+                $this->line(
+                    $settlement->id,
+                    0,
+                    (float) $advance->amount,
+                    bankAccountId: $advance->bank_account_id,
+                    cashAccountId: $advance->cash_account_id
+                ),
+            ], $user);
+        });
+    }
+
+    public function reverseSalaryAdvance(SalaryAdvance $advance, ?User $user = null): Collection
+    {
+        return DB::transaction(fn () => $this->activeSourceEntries($advance, 'accounting')
+            ->map(fn (JournalEntry $entry) => $this->reverse($entry, $user)));
+    }
+
     public function reversePayrollRun(PayrollRun $payroll, ?User $user = null): Collection
     {
-        return DB::transaction(fn () => $this->activeSourceEntries($payroll, 'accounting')
-            ->map(fn (JournalEntry $entry) => $this->reverse($entry, $user)));
+        return DB::transaction(function () use ($payroll, $user) {
+            $reversed = $this->activeSourceEntries($payroll, 'accounting')
+                ->map(fn (JournalEntry $entry) => $this->reverse($entry, $user));
+
+            $payroll->loadMissing('advances');
+            foreach ($payroll->advances->where('status', 'posted') as $advance) {
+                $reversed = $reversed->merge($this->reverseSalaryAdvance($advance, $user));
+            }
+
+            return $reversed;
+        });
     }
 
     public function createPostedEntry(array $header, array $lines, ?User $user = null): JournalEntry

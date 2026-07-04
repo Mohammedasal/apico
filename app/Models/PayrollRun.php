@@ -37,6 +37,21 @@ class PayrollRun extends Model
         return $this->hasMany(PayrollLine::class);
     }
 
+    public function advances(): HasMany
+    {
+        return $this->hasMany(SalaryAdvance::class);
+    }
+
+    public function getTotalAdvancesAttribute(): float
+    {
+        return round((float) $this->advances->where('status', 'posted')->sum('amount'), 3);
+    }
+
+    public function getRemainingSalaryAttribute(): float
+    {
+        return max(0, round((float) $this->total_net - $this->total_advances, 3));
+    }
+
     public function cashAccount(): BelongsTo
     {
         return $this->belongsTo(CashAccount::class);

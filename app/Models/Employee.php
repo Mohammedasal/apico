@@ -23,6 +23,11 @@ class Employee extends Model
         return $this->hasMany(PayrollLine::class);
     }
 
+    public function salaryAdvances(): HasMany
+    {
+        return $this->hasMany(SalaryAdvance::class);
+    }
+
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');

@@ -106,6 +106,72 @@ class PayrollTest extends TestCase
         ]);
     }
 
+    public function test_multiple_salary_advances_reduce_the_final_payroll_payment(): void
+    {
+        $run = $this->createDraftPayroll();
+
+        $this->post(route('accounting.payroll.advances.store', $run), [
+            'employee_id' => $this->employee->id,
+            'payment_date' => '2026-02-07',
+            'amount' => 30,
+            'payment_type' => 'cash',
+        ])->assertSessionHasNoErrors();
+        $this->post(route('accounting.payroll.advances.store', $run), [
+            'employee_id' => $this->employee->id,
+            'payment_date' => '2026-02-10',
+            'amount' => 50,
+            'payment_type' => 'cash',
+        ])->assertSessionHasNoErrors();
+
+        $run->refresh()->load('advances');
+        $this->assertSame(80.0, $run->total_advances);
+        $this->assertSame(445.0, $run->remaining_salary);
+        $this->assertDatabaseCount('salary_advances', 2);
+        $this->assertSame(2, JournalEntry::where('posting_type', 'salary_advance')->count());
+
+        $this->post(route('accounting.payroll.post', $run))->assertSessionHasNoErrors();
+        $this->post(route('accounting.payroll.pay', $run), [
+            'payment_date' => '2026-02-28',
+            'payment_type' => 'cash',
+        ])->assertSessionHasNoErrors();
+
+        $payment = JournalEntry::with('lines.account')
+            ->where('posting_type', 'payroll_payment')
+            ->firstOrFail();
+        $this->assertSame(445.0, $payment->total_debit);
+        $this->assertSame(445.0, $payment->total_credit);
+        $this->assertTrue($payment->lines->contains(
+            fn ($line) => $line->account->code === '1110' && (float) $line->credit === 445.0
+        ));
+    }
+
+    public function test_salary_advance_cannot_exceed_net_salary_and_can_be_cancelled(): void
+    {
+        $run = $this->createDraftPayroll();
+
+        $this->post(route('accounting.payroll.advances.store', $run), [
+            'employee_id' => $this->employee->id,
+            'payment_date' => '2026-02-07',
+            'amount' => 500,
+            'payment_type' => 'cash',
+        ])->assertSessionHasNoErrors();
+        $this->post(route('accounting.payroll.advances.store', $run), [
+            'employee_id' => $this->employee->id,
+            'payment_date' => '2026-02-10',
+            'amount' => 30,
+            'payment_type' => 'cash',
+        ])->assertSessionHasErrors('amount');
+
+        $advance = $run->advances()->firstOrFail();
+        $this->post(route('accounting.payroll.advances.cancel', [$run, $advance]))
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame('cancelled', $advance->fresh()->status);
+        $this->assertSame(0.0, $run->fresh()->load('advances')->total_advances);
+        $this->assertSame(2, JournalEntry::count());
+        $this->assertSame('reversed', JournalEntry::where('posting_type', 'salary_advance')->firstOrFail()->status);
+    }
+
     public function test_cancelling_paid_payroll_reverses_accrual_and_payment(): void
     {
         $run = $this->createDraftPayroll();
