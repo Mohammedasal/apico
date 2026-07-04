@@ -10,6 +10,8 @@ use App\Http\Controllers\ChequeOutController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExcelImportController;
+use App\Http\Controllers\ExpenseCategoryController;
+use App\Http\Controllers\ExpenseVoucherController;
 use App\Http\Controllers\JournalEntryController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\MaterialController;
@@ -98,6 +100,10 @@ Route::middleware('auth')->group(function () {
 
     Route::prefix('accounting')->name('accounting.')->middleware('role:admin,accountant')->group(function () {
         Route::get('/', AccountingDashboardController::class)->name('dashboard');
+        Route::get('/expenses/export', [ExpenseVoucherController::class, 'export'])->name('expenses.export');
+        Route::resource('expenses', ExpenseVoucherController::class)->except(['destroy']);
+        Route::post('/expenses/{expense}/cancel', [ExpenseVoucherController::class, 'cancel'])->name('expenses.cancel');
+        Route::resource('expense-categories', ExpenseCategoryController::class)->except(['show', 'destroy']);
         Route::get('/journals', [JournalEntryController::class, 'index'])->name('journals.index');
         Route::get('/journals/create', [JournalEntryController::class, 'create'])->name('journals.create');
         Route::post('/journals', [JournalEntryController::class, 'store'])->name('journals.store');

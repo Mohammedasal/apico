@@ -169,6 +169,8 @@
                 <a @class(['active' => request()->routeIs('accounting.periods.*')]) href="{{ route('accounting.periods.index') }}">{{ __('Accounting Periods') }}</a>
             @endif
             <a @class(['active' => request()->routeIs('accounting.journals.*')]) href="{{ route('accounting.journals.index') }}">{{ __('Journal Entries') }}</a>
+            <a @class(['active' => request()->routeIs('accounting.expenses.*')]) href="{{ route('accounting.expenses.index') }}">{{ __('Expenses') }}</a>
+            <a @class(['active' => request()->routeIs('accounting.expense-categories.*')]) href="{{ route('accounting.expense-categories.index') }}">{{ __('Expense Categories') }}</a>
         @endif
         @if ($currentUser?->canManageSystem())
             <div class="nav-section">{{ __('System') }}</div>

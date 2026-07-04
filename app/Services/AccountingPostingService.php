@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\AccountingPeriod;
 use App\Models\AccountMapping;
 use App\Models\ChartOfAccount;
+use App\Models\ExpenseVoucher;
 use App\Models\JournalEntry;
 use App\Models\Payment;
 use App\Models\RecycleIn;
@@ -56,7 +57,7 @@ class AccountingPostingService
         }
 
         return DB::transaction(function () use ($source, $user) {
-            $this->activeSourceEntries($source)->each(
+            $this->activeSourceEntries($source, 'operations')->each(
                 fn (JournalEntry $entry) => $this->reverse($entry, $user)
             );
 
@@ -70,7 +71,77 @@ class AccountingPostingService
             return collect();
         }
 
-        return DB::transaction(fn () => $this->activeSourceEntries($source)
+        return DB::transaction(fn () => $this->activeSourceEntries($source, 'operations')
+            ->map(fn (JournalEntry $entry) => $this->reverse($entry, $user)));
+    }
+
+    public function postExpenseVoucher(ExpenseVoucher $voucher, ?User $user = null): JournalEntry
+    {
+        return DB::transaction(function () use ($voucher, $user) {
+            if ($voucher->status !== 'posted') {
+                throw ValidationException::withMessages(['status' => 'Only posted expense vouchers create journal entries.']);
+            }
+
+            $existing = $this->activeSourceEntries($voucher, 'accounting')
+                ->where('posting_type', 'expense_voucher')
+                ->first();
+
+            if ($existing) {
+                return $existing->load('lines.account');
+            }
+
+            $voucher->loadMissing(['category.defaultAccount', 'cashAccount.chartAccount', 'bankAccount.chartAccount', 'payableAccount']);
+            $expenseAccount = $voucher->category->defaultAccount;
+            $this->assertPostingAccount($expenseAccount);
+
+            $amount = round((float) $voucher->amount, 3);
+            $paidAmount = round((float) $voucher->paid_amount, 3);
+            $unpaidAmount = round($amount - $paidAmount, 3);
+            $lines = [$this->line($expenseAccount->id, $amount, 0)];
+
+            if ($paidAmount > 0) {
+                $lines[] = $this->line(
+                    $this->expenseSettlementAccount($voucher)->id,
+                    0,
+                    $paidAmount,
+                    bankAccountId: $voucher->bank_account_id,
+                    cashAccountId: $voucher->cash_account_id
+                );
+            }
+
+            if ($unpaidAmount > 0) {
+                $payable = $voucher->payableAccount ?? $this->mappedAccount('accrued_expenses');
+                $this->assertPostingAccount($payable);
+                $lines[] = $this->line($payable->id, 0, $unpaidAmount);
+            }
+
+            return $this->createPostedEntry([
+                'entry_date' => $voucher->expense_date->toDateString(),
+                'memo_en' => 'Expense voucher '.$voucher->voucher_no,
+                'memo_ar' => 'سند مصروف '.$voucher->voucher_no,
+                'source_module' => 'accounting',
+                'source_type' => class_basename($voucher),
+                'source_id' => $voucher->id,
+                'posting_type' => 'expense_voucher',
+                'is_auto' => true,
+            ], $lines, $user);
+        });
+    }
+
+    public function repostExpenseVoucher(ExpenseVoucher $voucher, ?User $user = null): JournalEntry
+    {
+        return DB::transaction(function () use ($voucher, $user) {
+            $this->activeSourceEntries($voucher, 'accounting')->each(
+                fn (JournalEntry $entry) => $this->reverse($entry, $user)
+            );
+
+            return $this->postExpenseVoucher($voucher, $user);
+        });
+    }
+
+    public function reverseExpenseVoucher(ExpenseVoucher $voucher, ?User $user = null): Collection
+    {
+        return DB::transaction(fn () => $this->activeSourceEntries($voucher, 'accounting')
             ->map(fn (JournalEntry $entry) => $this->reverse($entry, $user)));
     }
 
@@ -319,10 +390,20 @@ class AccountingPostingService
         };
     }
 
-    private function activeSourceEntries(Model $source): Collection
+    private function expenseSettlementAccount(ExpenseVoucher $voucher): ChartOfAccount
+    {
+        return match ($voucher->payment_type) {
+            'cash' => $voucher->cashAccount?->chartAccount ?? $this->mappedAccount('cash_default'),
+            'bank_transfer' => $voucher->bankAccount?->chartAccount ?? $this->mappedAccount('bank_default'),
+            'cheque' => $this->mappedAccount('cheques_payable'),
+            default => throw ValidationException::withMessages(['payment_type' => 'Paid expenses require cash, bank transfer, or cheque payment type.']),
+        };
+    }
+
+    private function activeSourceEntries(Model $source, string $sourceModule): Collection
     {
         return JournalEntry::with('lines')
-            ->where('source_module', 'operations')
+            ->where('source_module', $sourceModule)
             ->where('source_type', class_basename($source))
             ->where('source_id', $source->getKey())
             ->where('status', 'posted')

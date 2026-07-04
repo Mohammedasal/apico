@@ -23,18 +23,18 @@ class AccountingAuthorizationTest extends TestCase
         $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
 
         $response = $this->actingAs($admin)->post(route('accounting.accounts.store'), [
-            'code' => '6700',
-            'name_en' => 'Office Expense',
+            'code' => '6990',
+            'name_en' => 'Test Expense',
             'name_ar' => 'مصاريف مكتبية',
             'type' => 'expense',
             'normal_balance' => 'debit',
             'is_posting' => 1,
             'is_active' => 1,
-            'sort_order' => 670,
+            'sort_order' => 699,
         ]);
 
         $response->assertRedirect(route('accounting.accounts.index'));
-        $this->assertDatabaseHas('chart_of_accounts', ['code' => '6700', 'name_en' => 'Office Expense']);
+        $this->assertDatabaseHas('chart_of_accounts', ['code' => '6990', 'name_en' => 'Test Expense']);
     }
 
     public function test_posting_account_cannot_be_used_as_parent(): void

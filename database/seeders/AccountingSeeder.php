@@ -6,6 +6,7 @@ use App\Models\AccountMapping;
 use App\Models\BankAccount;
 use App\Models\CashAccount;
 use App\Models\ChartOfAccount;
+use App\Models\ExpenseCategory;
 use App\Models\Setting;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
@@ -43,6 +44,13 @@ class AccountingSeeder extends Seeder
                 ['name_en' => 'Main Bank Account'],
                 ['name_ar' => 'الحساب البنكي الرئيسي', 'currency' => 'JOD', 'chart_account_id' => $accounts['1210']->id, 'is_active' => true, 'is_default' => true]
             );
+
+            foreach ($this->expenseCategories() as [$nameEn, $nameAr, $accountCode]) {
+                ExpenseCategory::updateOrCreate(
+                    ['name_en' => $nameEn],
+                    ['name_ar' => $nameAr, 'default_account_id' => $accounts[$accountCode]->id, 'is_active' => true]
+                );
+            }
 
             Setting::firstOrCreate(
                 ['key' => 'accounting_enabled'],
@@ -112,6 +120,29 @@ class AccountingSeeder extends Seeder
             $this->account('6400', 'Maintenance Expense', 'مصاريف الصيانة', 'expense', 'debit', true, 640, '6000'),
             $this->account('6500', 'Social Security Expense', 'مصاريف الضمان الاجتماعي', 'expense', 'debit', true, 650, '6000'),
             $this->account('6600', 'Miscellaneous Expense', 'مصاريف متنوعة', 'expense', 'debit', true, 660, '6000'),
+            $this->account('6700', 'Fuel Expense', 'مصاريف الوقود', 'expense', 'debit', true, 670, '6000'),
+            $this->account('6800', 'Transportation Expense', 'مصاريف النقل', 'expense', 'debit', true, 680, '6000'),
+            $this->account('6900', 'Office Expense', 'مصاريف مكتبية', 'expense', 'debit', true, 690, '6000'),
+            $this->account('6910', 'Professional Fees', 'أتعاب مهنية', 'expense', 'debit', true, 691, '6000'),
+            $this->account('6920', 'Cleaning Expense', 'مصاريف النظافة', 'expense', 'debit', true, 692, '6000'),
+            $this->account('6930', 'Factory Supplies Expense', 'مصاريف مستلزمات المصنع', 'expense', 'debit', true, 693, '6000'),
+        ];
+    }
+
+    private function expenseCategories(): array
+    {
+        return [
+            ['Rent', 'إيجار', '6200'],
+            ['Electricity', 'كهرباء', '6300'],
+            ['Maintenance', 'صيانة', '6400'],
+            ['Social Security', 'ضمان اجتماعي', '6500'],
+            ['Miscellaneous', 'متفرقات', '6600'],
+            ['Fuel', 'وقود', '6700'],
+            ['Transportation', 'نقل', '6800'],
+            ['Office Expenses', 'مصاريف مكتبية', '6900'],
+            ['Professional Fees', 'أتعاب مهنية', '6910'],
+            ['Cleaning', 'نظافة', '6920'],
+            ['Factory Supplies', 'مستلزمات المصنع', '6930'],
         ];
     }
 
