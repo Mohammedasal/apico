@@ -46,5 +46,7 @@ class DatabaseSeeder extends Seeder
         ] as $key => [$value, $description]) {
             Setting::updateOrCreate(['key' => $key], ['value' => $value, 'description' => $description]);
         }
+
+        $this->call(AccountingSeeder::class);
     }
 }

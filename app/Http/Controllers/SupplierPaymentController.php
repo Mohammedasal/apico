@@ -2,9 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\BankAccount;
+use App\Models\CashAccount;
 use App\Models\Supplier;
 use App\Models\SupplierPayment;
+use App\Services\AccountingPostingService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class SupplierPaymentController extends Controller
 {
@@ -20,12 +24,17 @@ class SupplierPaymentController extends Controller
         return view('supplier-payments.form', [
             'payment' => new SupplierPayment(['date' => now(), 'payment_type' => 'cash', 'cheque_status' => 'pending']),
             'suppliers' => Supplier::where('status', 'active')->orderBy('name')->get(),
+            'bankAccounts' => BankAccount::where('is_active', true)->orderByDesc('is_default')->orderBy('name_en')->get(),
+            'cashAccounts' => CashAccount::where('is_active', true)->orderByDesc('is_default')->orderBy('name_en')->get(),
         ]);
     }
 
-    public function store(Request $request)
+    public function store(Request $request, AccountingPostingService $posting)
     {
-        SupplierPayment::create($this->validated($request) + ['created_by' => $request->user()->id]);
+        DB::transaction(function () use ($request, $posting) {
+            $payment = SupplierPayment::create($this->validated($request) + ['created_by' => $request->user()->id]);
+            $posting->postOperational($payment, $request->user());
+        });
 
         return redirect()->route('supplier-payments.index')->with('status', 'Supplier payment saved.');
     }
@@ -35,12 +44,17 @@ class SupplierPaymentController extends Controller
         return view('supplier-payments.form', [
             'payment' => $supplierPayment,
             'suppliers' => Supplier::orderBy('name')->get(),
+            'bankAccounts' => BankAccount::where('is_active', true)->orderByDesc('is_default')->orderBy('name_en')->get(),
+            'cashAccounts' => CashAccount::where('is_active', true)->orderByDesc('is_default')->orderBy('name_en')->get(),
         ]);
     }
 
-    public function update(Request $request, SupplierPayment $supplierPayment)
+    public function update(Request $request, SupplierPayment $supplierPayment, AccountingPostingService $posting)
     {
-        $supplierPayment->update($this->validated($request) + ['updated_by' => $request->user()->id]);
+        DB::transaction(function () use ($request, $supplierPayment, $posting) {
+            $supplierPayment->update($this->validated($request) + ['updated_by' => $request->user()->id]);
+            $posting->repostOperational($supplierPayment->fresh(), $request->user());
+        });
 
         return redirect()->route('supplier-payments.index')->with('status', 'Supplier payment updated.');
     }
@@ -55,6 +69,8 @@ class SupplierPaymentController extends Controller
             'payment_method' => ['nullable', 'string', 'max:255'],
             'reference_no' => ['nullable', 'string', 'max:255'],
             'bank_name' => ['nullable', 'string', 'max:255'],
+            'bank_account_id' => ['nullable', 'exists:bank_accounts,id'],
+            'cash_account_id' => ['nullable', 'exists:cash_accounts,id'],
             'cheque_due_date' => ['nullable', 'date'],
             'cheque_status' => ['nullable', 'in:pending,collected,bounced,cancelled'],
             'notes' => ['nullable', 'string'],

@@ -16,6 +16,7 @@ class User extends Authenticatable
 {
     public const ROLES = [
         'admin' => 'Admin',
+        'accountant' => 'Accountant',
         'data_entry' => 'Data Entry',
         'viewer' => 'View Only',
     ];
@@ -44,12 +45,17 @@ class User extends Authenticatable
 
     public function canViewFinancialReports(): bool
     {
-        return in_array($this->role, ['admin', 'viewer'], true);
+        return in_array($this->role, ['admin', 'accountant', 'viewer'], true);
     }
 
     public function canViewProfitAndLoss(): bool
     {
-        return $this->role === 'admin';
+        return in_array($this->role, ['admin', 'accountant'], true);
+    }
+
+    public function canManageAccounting(): bool
+    {
+        return in_array($this->role, ['admin', 'accountant'], true);
     }
 
     public function canManageSystem(): bool

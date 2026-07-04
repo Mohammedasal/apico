@@ -1,15 +1,20 @@
 <?php
 
+use App\Http\Controllers\AccountingDashboardController;
+use App\Http\Controllers\AccountingPeriodController;
+use App\Http\Controllers\AccountMappingController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\ChartOfAccountController;
+use App\Http\Controllers\ChequeInController;
+use App\Http\Controllers\ChequeOutController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExcelImportController;
-use App\Http\Controllers\ChequeInController;
-use App\Http\Controllers\ChequeOutController;
+use App\Http\Controllers\JournalEntryController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\MaterialController;
-use App\Http\Controllers\ProductionController;
 use App\Http\Controllers\OperationController;
+use App\Http\Controllers\ProductionController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SettingController;
 use App\Http\Controllers\SupplierController;
@@ -89,5 +94,24 @@ Route::middleware('auth')->group(function () {
         Route::get('/settings', [SettingController::class, 'index'])->name('settings.index');
         Route::put('/settings', [SettingController::class, 'update'])->name('settings.update');
         Route::resource('users', UserController::class)->except(['show', 'destroy']);
+    });
+
+    Route::prefix('accounting')->name('accounting.')->middleware('role:admin,accountant')->group(function () {
+        Route::get('/', AccountingDashboardController::class)->name('dashboard');
+        Route::get('/journals', [JournalEntryController::class, 'index'])->name('journals.index');
+        Route::get('/journals/create', [JournalEntryController::class, 'create'])->name('journals.create');
+        Route::post('/journals', [JournalEntryController::class, 'store'])->name('journals.store');
+        Route::get('/journals/{journal}', [JournalEntryController::class, 'show'])->name('journals.show');
+        Route::post('/journals/{journal}/reverse', [JournalEntryController::class, 'reverse'])->name('journals.reverse');
+    });
+
+    Route::prefix('accounting')->name('accounting.')->middleware('role:admin')->group(function () {
+        Route::resource('accounts', ChartOfAccountController::class)->except(['show', 'destroy']);
+        Route::get('/mappings', [AccountMappingController::class, 'index'])->name('mappings.index');
+        Route::put('/mappings', [AccountMappingController::class, 'update'])->name('mappings.update');
+        Route::get('/periods', [AccountingPeriodController::class, 'index'])->name('periods.index');
+        Route::post('/periods', [AccountingPeriodController::class, 'store'])->name('periods.store');
+        Route::post('/periods/{period}/lock', [AccountingPeriodController::class, 'lock'])->name('periods.lock');
+        Route::post('/periods/{period}/unlock', [AccountingPeriodController::class, 'unlock'])->name('periods.unlock');
     });
 });

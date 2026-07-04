@@ -10,6 +10,8 @@
         <div><label>{{ __('Default Granulation Cost/Kg') }}</label><input type="number" step="0.001" name="default_granulation_cost_per_kg" value="{{ old('default_granulation_cost_per_kg', $settings['default_granulation_cost_per_kg']->value ?? 0) }}"></div>
         <div><label>{{ __('High Balance Alert') }}</label><input type="number" step="0.001" name="high_balance_threshold" value="{{ old('high_balance_threshold', $settings['high_balance_threshold']->value ?? 1000) }}"></div>
         <div><label>{{ __('Allow Stock Override') }}</label><select name="allow_stock_override"><option value="0" @selected(($settings['allow_stock_override']->value ?? '0') === '0')>{{ __('No') }}</option><option value="1" @selected(($settings['allow_stock_override']->value ?? '0') === '1')>{{ __('Yes') }}</option></select></div>
+        <div><label>{{ __('Automatic Accounting Posting') }}</label><select name="accounting_enabled"><option value="0" @selected(($settings['accounting_enabled']->value ?? '0') === '0')>{{ __('Disabled') }}</option><option value="1" @selected(($settings['accounting_enabled']->value ?? '0') === '1')>{{ __('Enabled') }}</option></select></div>
+        <div><label>{{ __('Monthly Expense Source') }}</label><select name="monthly_expense_source"><option value="legacy_monthly_expenses" @selected(($settings['monthly_expense_source']->value ?? 'legacy_monthly_expenses') === 'legacy_monthly_expenses')>{{ __('Legacy Monthly Expenses') }}</option><option value="accounting_expense_vouchers" @selected(($settings['monthly_expense_source']->value ?? '') === 'accounting_expense_vouchers') disabled>{{ __('Accounting Expense Vouchers') }}</option></select></div>
     </div>
     <p><button>{{ __('Save Settings') }}</button></p>
 </form>

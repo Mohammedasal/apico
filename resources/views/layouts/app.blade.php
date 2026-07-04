@@ -160,6 +160,16 @@
             <div class="nav-section">{{ __('Review') }}</div>
             <a @class(['active' => request()->routeIs('reports.*')]) href="{{ $currentUser->canViewProfitAndLoss() ? route('reports.monthly') : route('reports.alerts') }}">{{ __('Reports') }}</a>
         @endif
+        @if ($currentUser?->canManageAccounting())
+            <div class="nav-section">{{ __('Accounting') }}</div>
+            <a @class(['active' => request()->routeIs('accounting.dashboard')]) href="{{ route('accounting.dashboard') }}">{{ __('Accounting Dashboard') }}</a>
+            @if ($currentUser?->canManageSystem())
+                <a @class(['active' => request()->routeIs('accounting.accounts.*')]) href="{{ route('accounting.accounts.index') }}">{{ __('Chart of Accounts') }}</a>
+                <a @class(['active' => request()->routeIs('accounting.mappings.*')]) href="{{ route('accounting.mappings.index') }}">{{ __('Account Mappings') }}</a>
+                <a @class(['active' => request()->routeIs('accounting.periods.*')]) href="{{ route('accounting.periods.index') }}">{{ __('Accounting Periods') }}</a>
+            @endif
+            <a @class(['active' => request()->routeIs('accounting.journals.*')]) href="{{ route('accounting.journals.index') }}">{{ __('Journal Entries') }}</a>
+        @endif
         @if ($currentUser?->canManageSystem())
             <div class="nav-section">{{ __('System') }}</div>
             <a @class(['active' => request()->routeIs('settings.*')]) href="{{ route('settings.index') }}">{{ __('Settings') }}</a>

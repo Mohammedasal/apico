@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\BankAccount;
+use App\Models\CashAccount;
 use App\Models\Customer;
 use App\Models\Material;
 use App\Models\Payment;
@@ -11,8 +13,10 @@ use App\Models\Setting;
 use App\Models\StockPurchase;
 use App\Models\StockSale;
 use App\Models\Supplier;
+use App\Services\AccountingPostingService;
 use App\Services\ApicoCalculator;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class OperationController extends Controller
@@ -67,15 +71,22 @@ class OperationController extends Controller
             'customers' => Customer::orderBy('name')->get(),
             'suppliers' => Supplier::where('status', 'active')->orderBy('name')->get(),
             'materials' => Material::where('is_active', true)->orderBy('name')->get(),
+            'bankAccounts' => BankAccount::where('is_active', true)->orderByDesc('is_default')->orderBy('name_en')->get(),
+            'cashAccounts' => CashAccount::where('is_active', true)->orderByDesc('is_default')->orderBy('name_en')->get(),
             'recentRecord' => $recentRecord,
         ]);
     }
 
-    public function store(string $module, Request $request, ApicoCalculator $calculator)
+    public function store(string $module, Request $request, ApicoCalculator $calculator, AccountingPostingService $posting)
     {
         $data = $this->validated($module, $request, $calculator);
         $data['created_by'] = $request->user()->id;
-        $record = $this->module($module)['model']::create($data);
+        $record = DB::transaction(function () use ($module, $data, $request, $posting) {
+            $record = $this->module($module)['model']::create($data);
+            $posting->postOperational($record, $request->user());
+
+            return $record;
+        });
 
         return redirect()
             ->route('operations.create', $module)
@@ -92,16 +103,21 @@ class OperationController extends Controller
             'customers' => Customer::orderBy('name')->get(),
             'suppliers' => Supplier::orderBy('name')->get(),
             'materials' => Material::where('is_active', true)->orderBy('name')->get(),
+            'bankAccounts' => BankAccount::where('is_active', true)->orderByDesc('is_default')->orderBy('name_en')->get(),
+            'cashAccounts' => CashAccount::where('is_active', true)->orderByDesc('is_default')->orderBy('name_en')->get(),
             'recentRecord' => null,
         ]);
     }
 
-    public function update(string $module, int $id, Request $request, ApicoCalculator $calculator)
+    public function update(string $module, int $id, Request $request, ApicoCalculator $calculator, AccountingPostingService $posting)
     {
         $record = $this->module($module)['model']::findOrFail($id);
         $data = $this->validated($module, $request, $calculator, $id);
         $data['updated_by'] = $request->user()->id;
-        $record->update($data);
+        DB::transaction(function () use ($record, $data, $request, $posting) {
+            $record->update($data);
+            $posting->repostOperational($record->fresh(), $request->user());
+        });
 
         return redirect()->route('operations.index', $module)->with('status', __(':item updated.', ['item' => __($this->module($module)['title'])]));
     }
@@ -162,6 +178,8 @@ class OperationController extends Controller
                 'payment_method' => ['nullable', 'string', 'max:255'],
                 'reference_no' => ['nullable', 'string', 'max:255'],
                 'bank_name' => ['nullable', 'string', 'max:255'],
+                'bank_account_id' => ['nullable', 'exists:bank_accounts,id'],
+                'cash_account_id' => ['nullable', 'exists:cash_accounts,id'],
                 'cheque_due_date' => ['nullable', 'date'],
                 'cheque_status' => ['nullable', 'in:pending,collected,bounced,cancelled'],
                 'notes' => ['nullable', 'string'],
