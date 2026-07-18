@@ -4,10 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\Customer;
 use App\Models\Payment;
+use App\Models\ProductionDay;
 use App\Models\RecycleIn;
 use App\Models\RecycleOut;
 use App\Models\StockPurchase;
-use App\Models\StockSale;
 use App\Services\ApicoCalculator;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -23,7 +23,11 @@ class DashboardController extends Controller
             ->when($to, fn ($query) => $query->whereDate('date', '<=', $to));
 
         $recycleOutKg = RecycleOut::query()->tap($dateRange)->sum('weight_kg');
-        $productionKg = RecycleOut::query()->tap($dateRange)->sum('recycled_out_kg');
+        $productionEntries = ProductionDay::query()
+            ->when($from, fn ($query) => $query->whereDate('date', '>=', $from))
+            ->when($to, fn ($query) => $query->whereDate('date', '<=', $to))
+            ->get();
+        $productionKg = round($productionEntries->sum(fn (ProductionDay $day) => $day->total_kg), 3);
         $customers = Customer::all();
         $customerBalances = $customers->map(fn (Customer $customer) => [
             'id' => $customer->id,
@@ -32,11 +36,7 @@ class DashboardController extends Controller
             'remaining_jod' => $calculator->customerBalance($customer),
         ]);
         $receivables = $customerBalances->sum(fn (array $customer) => max(0, $customer['remaining_jod']));
-        $productionDays = RecycleOut::query()
-            ->tap($dateRange)
-            ->where('date', '!=', '1900-01-01')
-            ->distinct()
-            ->count('date');
+        $productionDays = $productionEntries->filter(fn (ProductionDay $day) => $day->total_kg > 0)->count();
         $wasteKg = RecycleOut::query()->tap($dateRange)->sum('waste_kg');
         $stockProfit = $calculator->stockProfitSummary($from, $to);
         $actualProfit = $calculator->actualProfitSummary($from, $to);
