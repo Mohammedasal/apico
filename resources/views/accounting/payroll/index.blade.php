@@ -3,7 +3,7 @@
 @section('content')
 <div class="section-title">
     <div><h1>{{ __('Payroll') }}</h1><div class="muted">{{ __('Monthly salary accruals and payments.') }}</div></div>
-    <a class="button" href="{{ route('accounting.payroll.create') }}">{{ __('New Payroll Run') }}</a>
+    <div style="display:flex;gap:8px"><a class="button" href="{{ route('accounting.salary-advances.create') }}">{{ __('Add Salary Advance') }}</a><a class="button" href="{{ route('accounting.payroll.create') }}">{{ __('New Payroll Run') }}</a></div>
 </div>
 <form class="filters" method="get">
     <div><label>{{ __('Year') }}</label><input type="number" name="year" value="{{ $filters['year'] ?? '' }}"></div>
@@ -15,7 +15,7 @@
 </form>
 <div class="table-wrap">
 <table>
-    <thead><tr><th>{{ __('Period') }}</th><th>{{ __('Payroll Date') }}</th><th>{{ __('Employees') }}</th><th>{{ __('Gross') }}</th><th>{{ __('Deductions') }}</th><th>{{ __('Net Salary') }}</th><th>{{ __('Advances') }}</th><th>{{ __('Remaining') }}</th><th>{{ __('Status') }}</th></tr></thead>
+    <thead><tr><th>{{ __('Period') }}</th><th>{{ __('Payroll Date') }}</th><th>{{ __('Employees') }}</th><th>{{ __('Gross') }}</th><th>{{ __('Employee Social Security') }}</th><th>{{ __('Employer Social Security') }}</th><th>{{ __('Other Deductions') }}</th><th>{{ __('Net Salary') }}</th><th>{{ __('Advances') }}</th><th>{{ __('Remaining') }}</th><th>{{ __('Status') }}</th></tr></thead>
     <tbody>
     @forelse ($runs as $run)
         <tr>
@@ -23,6 +23,8 @@
             <td>{{ $run->payroll_date->toDateString() }}</td>
             <td>{{ $run->lines->count() }}</td>
             <td>{{ number_format($run->total_gross + $run->total_allowances, 3) }}</td>
+            <td>{{ number_format($run->total_employee_social_security, 3) }}</td>
+            <td>{{ number_format($run->total_employer_social_security, 3) }}</td>
             <td>{{ number_format($run->total_deductions, 3) }}</td>
             <td>{{ number_format($run->total_net, 3) }}</td>
             <td>{{ number_format($run->total_advances, 3) }}</td>
@@ -30,7 +32,7 @@
             <td>{{ __(ucfirst($run->status)) }}</td>
         </tr>
     @empty
-        <tr><td colspan="9">{{ __('No payroll runs.') }}</td></tr>
+        <tr><td colspan="11">{{ __('No payroll runs.') }}</td></tr>
     @endforelse
     </tbody>
 </table>

@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\BankAccount;
+use App\Models\CashAccount;
+use App\Models\Employee;
 use App\Models\PayrollRun;
 use App\Models\SalaryAdvance;
 use App\Services\AccountingPostingService;
@@ -13,16 +16,47 @@ use Illuminate\Validation\ValidationException;
 
 class SalaryAdvanceController extends Controller
 {
-    public function store(
-        Request $request,
-        PayrollRun $payroll,
-        AccountingPostingService $posting,
-        AuditService $audit
-    ) {
-        if ($payroll->status !== 'draft') {
-            throw ValidationException::withMessages(['status' => __('Salary advances can only be added to draft payroll.')]);
-        }
+    public function index(Request $request)
+    {
+        $filters = $request->only(['year', 'month', 'employee_id', 'status']);
+        $year = $request->integer('year') ?: now()->year;
+        $month = $request->integer('month') ?: now()->month;
 
+        $query = SalaryAdvance::query()
+            ->whereYear('payment_date', $year)
+            ->whereMonth('payment_date', $month)
+            ->when($request->input('employee_id'), fn ($query, $employee) => $query->where('employee_id', $employee))
+            ->when($request->input('status'), fn ($query, $status) => $query->where('status', $status));
+
+        $totalPosted = (float) (clone $query)->where('status', 'posted')->sum('amount');
+        $advances = $query
+            ->with(['employee', 'payrollRun', 'cashAccount', 'bankAccount', 'creator'])
+            ->latest('payment_date')
+            ->latest('id')
+            ->paginate(30)
+            ->withQueryString();
+
+        return view('accounting.salary-advances.index', [
+            'advances' => $advances,
+            'employees' => Employee::orderBy('name_en')->get(),
+            'filters' => array_merge($filters, ['year' => $year, 'month' => $month]),
+            'totalPosted' => $totalPosted,
+        ]);
+    }
+
+    public function create(Request $request)
+    {
+        return view('accounting.salary-advances.create', [
+            'employees' => Employee::where('is_active', true)->orderBy('name_en')->get(),
+            'cashAccounts' => CashAccount::where('is_active', true)->orderByDesc('is_default')->orderBy('name_en')->get(),
+            'bankAccounts' => BankAccount::where('is_active', true)->orderByDesc('is_default')->orderBy('name_en')->get(),
+            'selectedEmployee' => $request->integer('employee_id'),
+            'paymentDate' => $request->date('payment_date')?->toDateString() ?? now()->toDateString(),
+        ]);
+    }
+
+    public function store(Request $request, AccountingPostingService $posting, AuditService $audit)
+    {
         $data = $request->validate([
             'employee_id' => ['required', 'exists:employees,id'],
             'payment_date' => ['required', 'date'],
@@ -34,25 +68,24 @@ class SalaryAdvanceController extends Controller
             'notes' => ['nullable', 'string'],
         ]);
 
-        $line = $payroll->lines()->where('employee_id', $data['employee_id'])->first();
-        if (! $line) {
-            throw ValidationException::withMessages(['employee_id' => __('The employee is not included in this payroll run.')]);
-        }
         $paymentDate = Carbon::parse($data['payment_date']);
-        if ($paymentDate->year !== $payroll->period_year || $paymentDate->month !== $payroll->period_month) {
-            throw ValidationException::withMessages(['payment_date' => __('The advance date must be within the payroll month.')]);
+        $payroll = PayrollRun::where('period_year', $paymentDate->year)
+            ->where('period_month', $paymentDate->month)
+            ->first();
+
+        if ($payroll && $payroll->status !== 'draft') {
+            throw ValidationException::withMessages([
+                'payment_date' => __('Payroll for this month is already finalized.'),
+            ]);
         }
 
-        $alreadyAdvanced = (float) $payroll->advances()
-            ->where('employee_id', $data['employee_id'])
-            ->where('status', 'posted')
-            ->sum('amount');
-        if (round($alreadyAdvanced + (float) $data['amount'], 3) > (float) $line->net_salary) {
-            throw ValidationException::withMessages(['amount' => __('Salary advances cannot exceed the employee net salary.')]);
-        }
+        $payrollId = $payroll?->lines()->where('employee_id', $data['employee_id'])->exists()
+            ? $payroll->id
+            : null;
 
-        DB::transaction(function () use ($payroll, $data, $request, $posting, $audit) {
-            $advance = $payroll->advances()->create($data + [
+        DB::transaction(function () use ($payrollId, $data, $request, $posting, $audit) {
+            $advance = SalaryAdvance::create($data + [
+                'payroll_run_id' => $payrollId,
                 'status' => 'posted',
                 'created_by' => $request->user()->id,
             ]);
@@ -60,21 +93,23 @@ class SalaryAdvanceController extends Controller
             $audit->record('salary_advance_created', $advance, null, $advance->toArray());
         });
 
-        return back()->with('status', __('Salary advance posted.'));
+        return redirect()->route('accounting.salary-advances.index', [
+            'year' => $paymentDate->year,
+            'month' => $paymentDate->month,
+        ])->with('status', __('Salary advance posted.'));
     }
 
     public function cancel(
-        PayrollRun $payroll,
         SalaryAdvance $advance,
         Request $request,
         AccountingPostingService $posting,
         AuditService $audit
     ) {
-        if ($advance->payroll_run_id !== $payroll->id) {
-            abort(404);
-        }
-        if ($payroll->status !== 'draft' || $advance->status !== 'posted') {
-            throw ValidationException::withMessages(['status' => __('Only posted advances on draft payroll can be cancelled.')]);
+        $advance->loadMissing('payrollRun');
+        if ($advance->status !== 'posted' || ($advance->payrollRun && $advance->payrollRun->status !== 'draft')) {
+            throw ValidationException::withMessages([
+                'status' => __('Only unsettled salary advances can be cancelled.'),
+            ]);
         }
 
         DB::transaction(function () use ($advance, $request, $posting, $audit) {

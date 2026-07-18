@@ -9,7 +9,8 @@ class PayrollLine extends Model
 {
     protected $fillable = [
         'payroll_run_id', 'employee_id', 'gross_salary', 'allowances',
-        'deductions', 'employer_social_security', 'net_salary', 'notes',
+        'employee_social_security', 'deductions', 'employer_social_security',
+        'net_salary', 'notes',
     ];
 
     protected function casts(): array
@@ -17,6 +18,7 @@ class PayrollLine extends Model
         return [
             'gross_salary' => 'decimal:3',
             'allowances' => 'decimal:3',
+            'employee_social_security' => 'decimal:3',
             'deductions' => 'decimal:3',
             'employer_social_security' => 'decimal:3',
             'net_salary' => 'decimal:3',

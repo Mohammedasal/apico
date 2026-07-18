@@ -171,6 +171,7 @@
             <a @class(['active' => request()->routeIs('accounting.journals.*')]) href="{{ route('accounting.journals.index') }}">{{ __('Journal Entries') }}</a>
             <a @class(['active' => request()->routeIs('accounting.expenses.*')]) href="{{ route('accounting.expenses.index') }}">{{ __('Expenses') }}</a>
             <a @class(['active' => request()->routeIs('accounting.expense-categories.*')]) href="{{ route('accounting.expense-categories.index') }}">{{ __('Expense Categories') }}</a>
+            <a @class(['active' => request()->routeIs('accounting.salary-advances.*')]) href="{{ route('accounting.salary-advances.index') }}">{{ __('Salary Advances') }}</a>
             <a @class(['active' => request()->routeIs('accounting.payroll.*')]) href="{{ route('accounting.payroll.index') }}">{{ __('Payroll') }}</a>
             <a @class(['active' => request()->routeIs('accounting.employees.*')]) href="{{ route('accounting.employees.index') }}">{{ __('Employees') }}</a>
         @endif

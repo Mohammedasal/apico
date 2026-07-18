@@ -10,7 +10,9 @@ class ExpenseVoucher extends Model
     protected $fillable = [
         'voucher_no', 'expense_date', 'expense_category_id', 'amount', 'paid_amount',
         'payment_status', 'payment_type', 'cash_account_id', 'bank_account_id',
-        'payable_account_id', 'cheque_due_date', 'cheque_bank', 'reference',
+        'payable_account_id', 'cheque_due_date', 'cheque_bank', 'cheque_status',
+        'cheque_settlement_date', 'cheque_bank_account_id',
+        'cheque_status_updated_at', 'cheque_status_updated_by', 'reference',
         'notes', 'status', 'created_by', 'updated_by',
     ];
 
@@ -21,6 +23,8 @@ class ExpenseVoucher extends Model
             'amount' => 'decimal:3',
             'paid_amount' => 'decimal:3',
             'cheque_due_date' => 'date',
+            'cheque_settlement_date' => 'date',
+            'cheque_status_updated_at' => 'datetime',
         ];
     }
 
@@ -37,6 +41,11 @@ class ExpenseVoucher extends Model
     public function bankAccount(): BelongsTo
     {
         return $this->belongsTo(BankAccount::class);
+    }
+
+    public function chequeBankAccount(): BelongsTo
+    {
+        return $this->belongsTo(BankAccount::class, 'cheque_bank_account_id');
     }
 
     public function payableAccount(): BelongsTo

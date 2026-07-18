@@ -112,6 +112,9 @@ class OperationController extends Controller
     public function update(string $module, int $id, Request $request, ApicoCalculator $calculator, AccountingPostingService $posting)
     {
         $record = $this->module($module)['model']::findOrFail($id);
+        if ($record instanceof Payment && $record->payment_type === 'cheque' && $record->cheque_status !== 'pending') {
+            throw ValidationException::withMessages(['cheque_status' => __('Settled cheques must be corrected from the cheque settlement page.')]);
+        }
         $data = $this->validated($module, $request, $calculator, $id);
         $data['updated_by'] = $request->user()->id;
         DB::transaction(function () use ($record, $data, $request, $posting) {
@@ -257,9 +260,7 @@ class OperationController extends Controller
         }
 
         if ($module === 'payments') {
-            $data['cheque_status'] = $data['payment_type'] === 'cheque'
-                ? ($data['cheque_status'] ?? 'pending')
-                : 'pending';
+            $data['cheque_status'] = 'pending';
             $data['cheque_due_date'] = $data['payment_type'] === 'cheque' ? ($data['cheque_due_date'] ?? null) : null;
         }
 

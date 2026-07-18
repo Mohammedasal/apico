@@ -167,11 +167,13 @@ class AccountingPostingService
             $salaryPayable = $this->mappedAccount('salary_payable');
             $socialExpense = $this->mappedAccount('social_security_expense');
             $socialPayable = $this->mappedAccount('social_security_payable');
+            $otherDeductionsPayable = $this->mappedAccount('accrued_expenses');
             $lines = [];
 
             foreach ($payroll->lines as $payrollLine) {
                 $grossExpense = round((float) $payrollLine->gross_salary + (float) $payrollLine->allowances, 3);
-                $deductions = round((float) $payrollLine->deductions, 3);
+                $employeeSocial = round((float) $payrollLine->employee_social_security, 3);
+                $otherDeductions = round((float) $payrollLine->deductions, 3);
                 $employerSocial = round((float) $payrollLine->employer_social_security, 3);
                 $net = round((float) $payrollLine->net_salary, 3);
 
@@ -180,8 +182,11 @@ class AccountingPostingService
                     $lines[] = $this->line($socialExpense->id, $employerSocial, 0, employeeId: $payrollLine->employee_id);
                 }
                 $lines[] = $this->line($salaryPayable->id, 0, $net, employeeId: $payrollLine->employee_id);
-                if (($deductions + $employerSocial) > 0) {
-                    $lines[] = $this->line($socialPayable->id, 0, $deductions + $employerSocial, employeeId: $payrollLine->employee_id);
+                if (($employeeSocial + $employerSocial) > 0) {
+                    $lines[] = $this->line($socialPayable->id, 0, $employeeSocial + $employerSocial, employeeId: $payrollLine->employee_id);
+                }
+                if ($otherDeductions > 0) {
+                    $lines[] = $this->line($otherDeductionsPayable->id, 0, $otherDeductions, employeeId: $payrollLine->employee_id);
                 }
             }
 
@@ -195,6 +200,53 @@ class AccountingPostingService
                 'posting_type' => 'payroll_accrual',
                 'is_auto' => true,
             ], $lines, $user);
+        });
+    }
+
+    public function postPayrollSocialSecurityPayment(PayrollRun $payroll, ?User $user = null): JournalEntry
+    {
+        return DB::transaction(function () use ($payroll, $user) {
+            $existing = $this->activeSourceEntries($payroll, 'accounting')
+                ->where('posting_type', 'payroll_social_security_payment')
+                ->first();
+
+            if ($existing) {
+                return $existing->load('lines.account');
+            }
+
+            if (! $payroll->social_security_payment_date || ! in_array($payroll->social_security_payment_type, ['cash', 'bank_transfer'], true)) {
+                throw ValidationException::withMessages(['social_security_payment_type' => 'Social security settlement requires a payment date and cash or bank payment type.']);
+            }
+
+            $payroll->loadMissing(['socialSecurityCashAccount.chartAccount', 'socialSecurityBankAccount.chartAccount']);
+            $amount = round((float) $payroll->total_social_security, 3);
+            if ($amount <= 0) {
+                throw ValidationException::withMessages(['amount' => 'This payroll has no social security payable to settle.']);
+            }
+
+            $settlement = $payroll->social_security_payment_type === 'cash'
+                ? ($payroll->socialSecurityCashAccount?->chartAccount ?? $this->mappedAccount('cash_default'))
+                : ($payroll->socialSecurityBankAccount?->chartAccount ?? $this->mappedAccount('bank_default'));
+
+            return $this->createPostedEntry([
+                'entry_date' => $payroll->social_security_payment_date->toDateString(),
+                'memo_en' => 'Social security settlement '.$payroll->period_year.'-'.str_pad((string) $payroll->period_month, 2, '0', STR_PAD_LEFT),
+                'memo_ar' => 'تسديد الضمان الاجتماعي '.$payroll->period_year.'-'.str_pad((string) $payroll->period_month, 2, '0', STR_PAD_LEFT),
+                'source_module' => 'accounting',
+                'source_type' => class_basename($payroll),
+                'source_id' => $payroll->id,
+                'posting_type' => 'payroll_social_security_payment',
+                'is_auto' => true,
+            ], [
+                $this->line($this->mappedAccount('social_security_payable')->id, $amount, 0),
+                $this->line(
+                    $settlement->id,
+                    0,
+                    $amount,
+                    bankAccountId: $payroll->social_security_bank_account_id,
+                    cashAccountId: $payroll->social_security_cash_account_id
+                ),
+            ], $user);
         });
     }
 
@@ -309,19 +361,153 @@ class AccountingPostingService
             ->map(fn (JournalEntry $entry) => $this->reverse($entry, $user)));
     }
 
-    public function reversePayrollRun(PayrollRun $payroll, ?User $user = null): Collection
+    public function repostIncomingChequeSettlement(Payment $payment, ?User $user = null): Collection
     {
-        return DB::transaction(function () use ($payroll, $user) {
-            $reversed = $this->activeSourceEntries($payroll, 'accounting')
-                ->map(fn (JournalEntry $entry) => $this->reverse($entry, $user));
+        if (! $this->automaticPostingEnabled()) {
+            return collect();
+        }
+        if ($payment->payment_type !== 'cheque') {
+            throw ValidationException::withMessages(['payment_type' => __('Only cheque payments can be settled.')]);
+        }
 
-            $payroll->loadMissing('advances');
-            foreach ($payroll->advances->where('status', 'posted') as $advance) {
-                $reversed = $reversed->merge($this->reverseSalaryAdvance($advance, $user));
+        return DB::transaction(function () use ($payment, $user) {
+            $this->reverseSettlementEntries($payment, [
+                'customer_cheque_collected', 'customer_cheque_bounced', 'customer_cheque_cancelled',
+            ], $user);
+
+            if (! $this->activeSourceEntries($payment, 'operations')->where('posting_type', 'customer_payment')->count()) {
+                $this->postCustomerPayment($payment, $user);
+            }
+            if ($payment->cheque_status === 'pending') {
+                return collect();
             }
 
-            return $reversed;
+            $this->assertChequeSettlementData($payment->cheque_status, $payment->cheque_settlement_date, $payment->cheque_bank_account_id);
+            $payment->loadMissing(['customer', 'chequeBankAccount.chartAccount']);
+            $amount = abs(round((float) $payment->amount, 3));
+            $chequesReceivable = $this->mappedAccount('cheques_receivable');
+
+            if ($payment->cheque_status === 'collected') {
+                $debitAccount = $payment->chequeBankAccount?->chartAccount ?? $this->mappedAccount('bank_default');
+                $postingType = 'customer_cheque_collected';
+                $memoEn = 'Customer cheque collected - '.$payment->customer?->name;
+                $memoAr = 'تحصيل شيك عميل - '.$payment->customer?->name;
+                $bankAccountId = $payment->cheque_bank_account_id;
+            } else {
+                $debitAccount = $this->mappedAccount('accounts_receivable_control');
+                $postingType = $payment->cheque_status === 'bounced' ? 'customer_cheque_bounced' : 'customer_cheque_cancelled';
+                $memoEn = $payment->cheque_status === 'bounced' ? 'Customer cheque bounced' : 'Customer cheque cancelled';
+                $memoAr = $payment->cheque_status === 'bounced' ? 'شيك عميل راجع' : 'إلغاء شيك عميل';
+                $bankAccountId = null;
+            }
+
+            return collect([$this->createPostedEntry([
+                'entry_date' => $payment->cheque_settlement_date->toDateString(),
+                'memo_en' => $memoEn,
+                'memo_ar' => $memoAr,
+                'source_module' => 'accounting',
+                'source_type' => class_basename($payment),
+                'source_id' => $payment->id,
+                'posting_type' => $postingType,
+                'is_auto' => true,
+            ], [
+                $this->line($debitAccount->id, $amount, 0, customerId: $payment->customer_id, bankAccountId: $bankAccountId, chequeId: $payment->id),
+                $this->line($chequesReceivable->id, 0, $amount, customerId: $payment->customer_id, chequeId: $payment->id),
+            ], $user)]);
         });
+    }
+
+    public function repostSupplierChequeSettlement(SupplierPayment $payment, ?User $user = null): Collection
+    {
+        if (! $this->automaticPostingEnabled()) {
+            return collect();
+        }
+        if ($payment->payment_type !== 'cheque') {
+            throw ValidationException::withMessages(['payment_type' => __('Only supplier cheque payments can be settled.')]);
+        }
+
+        return DB::transaction(function () use ($payment, $user) {
+            $this->reverseSettlementEntries($payment, ['supplier_cheque_cleared'], $user);
+            $original = $this->activeSourceEntries($payment, 'operations')->where('posting_type', 'supplier_payment');
+
+            if ($original->isEmpty()) {
+                $this->postSupplierPayment($payment, $user);
+                $original = $this->activeSourceEntries($payment, 'operations')->where('posting_type', 'supplier_payment');
+            }
+            if ($payment->cheque_status === 'cancelled') {
+                return $original->map(fn (JournalEntry $entry) => $this->reverse($entry, $user));
+            }
+            if ($payment->cheque_status === 'pending') {
+                return collect();
+            }
+
+            $this->assertChequeSettlementData($payment->cheque_status, $payment->cheque_settlement_date, $payment->cheque_bank_account_id);
+            $payment->loadMissing(['supplier', 'chequeBankAccount.chartAccount']);
+            $bank = $payment->chequeBankAccount?->chartAccount ?? $this->mappedAccount('bank_default');
+            $amount = abs(round((float) $payment->amount, 3));
+
+            return collect([$this->createPostedEntry([
+                'entry_date' => $payment->cheque_settlement_date->toDateString(),
+                'memo_en' => 'Supplier cheque cleared - '.$payment->supplier?->name,
+                'memo_ar' => 'صرف شيك مورد - '.$payment->supplier?->name,
+                'source_module' => 'accounting',
+                'source_type' => class_basename($payment),
+                'source_id' => $payment->id,
+                'posting_type' => 'supplier_cheque_cleared',
+                'is_auto' => true,
+            ], [
+                $this->line($this->mappedAccount('cheques_payable')->id, $amount, 0, supplierId: $payment->supplier_id, chequeId: $payment->id),
+                $this->line($bank->id, 0, $amount, supplierId: $payment->supplier_id, bankAccountId: $payment->cheque_bank_account_id, chequeId: $payment->id),
+            ], $user)]);
+        });
+    }
+
+    public function repostExpenseChequeSettlement(ExpenseVoucher $voucher, ?User $user = null): Collection
+    {
+        if ($voucher->payment_type !== 'cheque') {
+            throw ValidationException::withMessages(['payment_type' => __('Only cheque expense vouchers can be settled.')]);
+        }
+
+        return DB::transaction(function () use ($voucher, $user) {
+            $this->reverseSettlementEntries($voucher, ['expense_cheque_cleared'], $user);
+            $original = $this->activeSourceEntries($voucher, 'accounting')->where('posting_type', 'expense_voucher');
+
+            if ($original->isEmpty()) {
+                $this->postExpenseVoucher($voucher, $user);
+                $original = $this->activeSourceEntries($voucher, 'accounting')->where('posting_type', 'expense_voucher');
+            }
+            if ($voucher->cheque_status === 'cancelled') {
+                return $original->map(fn (JournalEntry $entry) => $this->reverse($entry, $user));
+            }
+            if ($voucher->cheque_status === 'pending') {
+                return collect();
+            }
+
+            $this->assertChequeSettlementData($voucher->cheque_status, $voucher->cheque_settlement_date, $voucher->cheque_bank_account_id);
+            $voucher->loadMissing('chequeBankAccount.chartAccount');
+            $bank = $voucher->chequeBankAccount?->chartAccount ?? $this->mappedAccount('bank_default');
+            $amount = round((float) $voucher->paid_amount, 3);
+
+            return collect([$this->createPostedEntry([
+                'entry_date' => $voucher->cheque_settlement_date->toDateString(),
+                'memo_en' => 'Expense cheque cleared - '.$voucher->voucher_no,
+                'memo_ar' => 'صرف شيك مصروف - '.$voucher->voucher_no,
+                'source_module' => 'accounting',
+                'source_type' => class_basename($voucher),
+                'source_id' => $voucher->id,
+                'posting_type' => 'expense_cheque_cleared',
+                'is_auto' => true,
+            ], [
+                $this->line($this->mappedAccount('cheques_payable')->id, $amount, 0, chequeId: $voucher->id),
+                $this->line($bank->id, 0, $amount, bankAccountId: $voucher->cheque_bank_account_id, chequeId: $voucher->id),
+            ], $user)]);
+        });
+    }
+
+    public function reversePayrollRun(PayrollRun $payroll, ?User $user = null): Collection
+    {
+        return DB::transaction(fn () => $this->activeSourceEntries($payroll, 'accounting')
+            ->map(fn (JournalEntry $entry) => $this->reverse($entry, $user)));
     }
 
     public function createPostedEntry(array $header, array $lines, ?User $user = null): JournalEntry
@@ -460,8 +646,8 @@ class AccountingPostingService
         $positive = (float) $source->amount >= 0;
 
         return collect([$this->postSourceEntry($source, 'customer_payment', $amount, [
-            $this->line($positive ? $destination->id : $ar->id, $amount, 0, customerId: $source->customer_id, bankAccountId: $source->bank_account_id, cashAccountId: $source->cash_account_id),
-            $this->line($positive ? $ar->id : $destination->id, 0, $amount, customerId: $source->customer_id, bankAccountId: $source->bank_account_id, cashAccountId: $source->cash_account_id),
+            $this->line($positive ? $destination->id : $ar->id, $amount, 0, customerId: $source->customer_id, bankAccountId: $source->bank_account_id, cashAccountId: $source->cash_account_id, chequeId: $source->payment_type === 'cheque' ? $source->id : null),
+            $this->line($positive ? $ar->id : $destination->id, 0, $amount, customerId: $source->customer_id, bankAccountId: $source->bank_account_id, cashAccountId: $source->cash_account_id, chequeId: $source->payment_type === 'cheque' ? $source->id : null),
         ], $user)]);
     }
 
@@ -473,8 +659,8 @@ class AccountingPostingService
         $positive = (float) $source->amount >= 0;
 
         return collect([$this->postSourceEntry($source, 'supplier_payment', $amount, [
-            $this->line($positive ? $ap->id : $paymentAccount->id, $amount, 0, supplierId: $source->supplier_id, bankAccountId: $source->bank_account_id, cashAccountId: $source->cash_account_id),
-            $this->line($positive ? $paymentAccount->id : $ap->id, 0, $amount, supplierId: $source->supplier_id, bankAccountId: $source->bank_account_id, cashAccountId: $source->cash_account_id),
+            $this->line($positive ? $ap->id : $paymentAccount->id, $amount, 0, supplierId: $source->supplier_id, bankAccountId: $source->bank_account_id, cashAccountId: $source->cash_account_id, chequeId: $source->payment_type === 'cheque' ? $source->id : null),
+            $this->line($positive ? $paymentAccount->id : $ap->id, 0, $amount, supplierId: $source->supplier_id, bankAccountId: $source->bank_account_id, cashAccountId: $source->cash_account_id, chequeId: $source->payment_type === 'cheque' ? $source->id : null),
         ], $user)]);
     }
 
@@ -590,6 +776,23 @@ class AccountingPostingService
             ->get();
     }
 
+    private function reverseSettlementEntries(Model $source, array $postingTypes, ?User $user): Collection
+    {
+        return $this->activeSourceEntries($source, 'accounting')
+            ->whereIn('posting_type', $postingTypes)
+            ->map(fn (JournalEntry $entry) => $this->reverse($entry, $user));
+    }
+
+    private function assertChequeSettlementData(string $status, mixed $date, ?int $bankAccountId): void
+    {
+        if (! in_array($status, ['collected', 'bounced', 'cancelled', 'cleared'], true) || ! $date) {
+            throw ValidationException::withMessages(['cheque_settlement_date' => __('A settlement date is required for this cheque status.')]);
+        }
+        if (in_array($status, ['collected', 'cleared'], true) && ! $bankAccountId) {
+            throw ValidationException::withMessages(['cheque_bank_account_id' => __('Select the bank account used for cheque settlement.')]);
+        }
+    }
+
     private function validatedLines(array $lines): array
     {
         if (count($lines) < 2) {
@@ -656,6 +859,7 @@ class AccountingPostingService
         ?int $employeeId = null,
         ?int $bankAccountId = null,
         ?int $cashAccountId = null,
+        ?int $chequeId = null,
     ): array {
         return [
             'account_id' => $accountId,
@@ -667,6 +871,7 @@ class AccountingPostingService
             'employee_id' => $employeeId,
             'bank_account_id' => $bankAccountId,
             'cash_account_id' => $cashAccountId,
+            'cheque_id' => $chequeId,
         ];
     }
 

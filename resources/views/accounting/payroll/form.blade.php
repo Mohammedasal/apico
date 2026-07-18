@@ -16,7 +16,7 @@
     @error('lines')<div class="error">{{ $message }}</div>@enderror
     <div class="table-wrap" style="margin-top:14px">
     <table>
-        <thead><tr><th>{{ __('Include') }}</th><th>{{ __('Employee') }}</th><th>{{ __('Gross Salary') }}</th><th>{{ __('Allowances') }}</th><th>{{ __('Deductions') }}</th><th>{{ __('Employer Social Security') }}</th><th>{{ __('Net Salary') }}</th><th>{{ __('Notes') }}</th></tr></thead>
+        <thead><tr><th>{{ __('Include') }}</th><th>{{ __('Employee') }}</th><th>{{ __('Gross Salary') }}</th><th>{{ __('Allowances') }}</th><th>{{ __('Employee Social Security') }}</th><th>{{ __('Other Deductions') }}</th><th>{{ __('Employer Social Security') }}</th><th>{{ __('Net Salary') }}</th><th>{{ __('Notes') }}</th></tr></thead>
         <tbody>
         @foreach ($employees as $index => $employee)
             @php
@@ -29,6 +29,7 @@
                 <td>{{ $employee->localized_name }}<div class="muted">{{ $employee->position }}</div></td>
                 <td><input class="gross" type="number" step="0.001" min="0" name="lines[{{ $index }}][gross_salary]" value="{{ $gross }}"></td>
                 <td><input class="allowances" type="number" step="0.001" min="0" name="lines[{{ $index }}][allowances]" value="{{ old("lines.$index.allowances", $line?->allowances ?? 0) }}"></td>
+                <td><input class="employee-social" type="number" step="0.001" min="0" name="lines[{{ $index }}][employee_social_security]" value="{{ old("lines.$index.employee_social_security", $line?->employee_social_security ?? 0) }}"></td>
                 <td><input class="deductions" type="number" step="0.001" min="0" name="lines[{{ $index }}][deductions]" value="{{ old("lines.$index.deductions", $line?->deductions ?? 0) }}"></td>
                 <td><input type="number" step="0.001" min="0" name="lines[{{ $index }}][employer_social_security]" value="{{ old("lines.$index.employer_social_security", $line?->employer_social_security ?? 0) }}"></td>
                 <td><strong class="net">{{ number_format((float) ($line?->net_salary ?? $employee->base_salary), 3) }}</strong></td>
@@ -43,13 +44,14 @@
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('.payroll-line').forEach(function (row) {
-        const inputs = row.querySelectorAll('.gross, .allowances, .deductions');
+        const inputs = row.querySelectorAll('.gross, .allowances, .employee-social, .deductions');
         const net = row.querySelector('.net');
         function calculate() {
             const gross = Number.parseFloat(row.querySelector('.gross').value) || 0;
             const allowances = Number.parseFloat(row.querySelector('.allowances').value) || 0;
+            const employeeSocial = Number.parseFloat(row.querySelector('.employee-social').value) || 0;
             const deductions = Number.parseFloat(row.querySelector('.deductions').value) || 0;
-            net.textContent = (gross + allowances - deductions).toFixed(3);
+            net.textContent = (gross + allowances - employeeSocial - deductions).toFixed(3);
         }
         inputs.forEach(function (input) { input.addEventListener('input', calculate); });
         calculate();

@@ -8,6 +8,7 @@ use App\Models\ChartOfAccount;
 use App\Models\Employee;
 use App\Models\JournalEntry;
 use App\Models\PayrollRun;
+use App\Models\SalaryAdvance;
 use App\Models\User;
 use Database\Seeders\AccountingSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -44,9 +45,10 @@ class PayrollTest extends TestCase
         $this->assertSame('draft', $run->status);
         $this->assertSame(500.0, (float) $run->total_gross);
         $this->assertSame(50.0, (float) $run->total_allowances);
-        $this->assertSame(25.0, (float) $run->total_deductions);
-        $this->assertSame(525.0, (float) $run->total_net);
-        $this->assertSame(525.0, (float) $run->lines->first()->net_salary);
+        $this->assertSame(5.0, (float) $run->total_deductions);
+        $this->assertSame(25.0, (float) $run->total_employee_social_security);
+        $this->assertSame(520.0, (float) $run->total_net);
+        $this->assertSame(520.0, (float) $run->lines->first()->net_salary);
         $this->assertDatabaseCount('journal_entries', 0);
     }
 
@@ -63,8 +65,9 @@ class PayrollTest extends TestCase
         $this->assertSame(560.0, $entry->total_credit);
         $this->assertTrue($entry->lines->every(fn ($line) => $line->employee_id === $this->employee->id));
         $this->assertTrue($entry->lines->contains(fn ($line) => $line->account->code === '6100' && (float) $line->debit === 550.0));
-        $this->assertTrue($entry->lines->contains(fn ($line) => $line->account->code === '2400' && (float) $line->credit === 525.0));
+        $this->assertTrue($entry->lines->contains(fn ($line) => $line->account->code === '2400' && (float) $line->credit === 520.0));
         $this->assertTrue($entry->lines->contains(fn ($line) => $line->account->code === '2500' && (float) $line->credit === 35.0));
+        $this->assertTrue($entry->lines->contains(fn ($line) => $line->account->code === '2300' && (float) $line->credit === 5.0));
     }
 
     public function test_cash_payroll_payment_clears_salary_payable(): void
@@ -81,10 +84,10 @@ class PayrollTest extends TestCase
         $run->refresh();
         $payment = JournalEntry::with('lines.account')->where('posting_type', 'payroll_payment')->firstOrFail();
         $this->assertSame('paid', $run->status);
-        $this->assertSame(525.0, $payment->total_debit);
-        $this->assertSame(525.0, $payment->total_credit);
-        $this->assertTrue($payment->lines->contains(fn ($line) => $line->account->code === '2400' && (float) $line->debit === 525.0));
-        $this->assertTrue($payment->lines->contains(fn ($line) => $line->account->code === '1110' && (float) $line->credit === 525.0));
+        $this->assertSame(520.0, $payment->total_debit);
+        $this->assertSame(520.0, $payment->total_credit);
+        $this->assertTrue($payment->lines->contains(fn ($line) => $line->account->code === '2400' && (float) $line->debit === 520.0));
+        $this->assertTrue($payment->lines->contains(fn ($line) => $line->account->code === '1110' && (float) $line->credit === 520.0));
     }
 
     public function test_bank_payroll_payment_uses_selected_bank(): void
@@ -102,30 +105,53 @@ class PayrollTest extends TestCase
         $this->assertDatabaseHas('journal_entry_lines', [
             'account_id' => $bank->chart_account_id,
             'bank_account_id' => $bank->id,
-            'credit' => 525,
+            'credit' => 520,
         ]);
+    }
+
+    public function test_social_security_payment_clears_social_security_payable(): void
+    {
+        $run = $this->createDraftPayroll();
+        $this->post(route('accounting.payroll.post', $run));
+
+        $this->post(route('accounting.payroll.pay-social-security', $run), [
+            'social_security_payment_date' => '2026-03-10',
+            'social_security_payment_type' => 'cash',
+            'social_security_payment_reference' => 'SSC-1',
+        ])->assertSessionHasNoErrors();
+
+        $run->refresh();
+        $payment = JournalEntry::with('lines.account')
+            ->where('posting_type', 'payroll_social_security_payment')
+            ->firstOrFail();
+        $this->assertNotNull($run->social_security_paid_at);
+        $this->assertSame(35.0, $payment->total_debit);
+        $this->assertSame(35.0, $payment->total_credit);
+        $this->assertTrue($payment->lines->contains(fn ($line) => $line->account->code === '2500' && (float) $line->debit === 35.0));
+        $this->assertTrue($payment->lines->contains(fn ($line) => $line->account->code === '1110' && (float) $line->credit === 35.0));
     }
 
     public function test_multiple_salary_advances_reduce_the_final_payroll_payment(): void
     {
-        $run = $this->createDraftPayroll();
-
-        $this->post(route('accounting.payroll.advances.store', $run), [
+        $this->post(route('accounting.salary-advances.store'), [
             'employee_id' => $this->employee->id,
             'payment_date' => '2026-02-07',
             'amount' => 30,
             'payment_type' => 'cash',
         ])->assertSessionHasNoErrors();
-        $this->post(route('accounting.payroll.advances.store', $run), [
+        $this->post(route('accounting.salary-advances.store'), [
             'employee_id' => $this->employee->id,
             'payment_date' => '2026-02-10',
             'amount' => 50,
             'payment_type' => 'cash',
         ])->assertSessionHasNoErrors();
 
+        $this->assertSame(2, SalaryAdvance::whereNull('payroll_run_id')->count());
+        $run = $this->createDraftPayroll();
+
         $run->refresh()->load('advances');
         $this->assertSame(80.0, $run->total_advances);
-        $this->assertSame(445.0, $run->remaining_salary);
+        $this->assertSame(440.0, $run->remaining_salary);
         $this->assertDatabaseCount('salary_advances', 2);
         $this->assertSame(2, JournalEntry::where('posting_type', 'salary_advance')->count());
 
@@ -138,38 +164,44 @@ class PayrollTest extends TestCase
         $payment = JournalEntry::with('lines.account')
             ->where('posting_type', 'payroll_payment')
             ->firstOrFail();
-        $this->assertSame(445.0, $payment->total_debit);
-        $this->assertSame(445.0, $payment->total_credit);
+        $this->assertSame(440.0, $payment->total_debit);
+        $this->assertSame(440.0, $payment->total_credit);
         $this->assertTrue($payment->lines->contains(
-            fn ($line) => $line->account->code === '1110' && (float) $line->credit === 445.0
+            fn ($line) => $line->account->code === '1110' && (float) $line->credit === 440.0
         ));
     }
 
-    public function test_salary_advance_cannot_exceed_net_salary_and_can_be_cancelled(): void
+    public function test_salary_advance_can_be_cancelled_before_payroll(): void
     {
-        $run = $this->createDraftPayroll();
-
-        $this->post(route('accounting.payroll.advances.store', $run), [
+        $this->post(route('accounting.salary-advances.store'), [
             'employee_id' => $this->employee->id,
             'payment_date' => '2026-02-07',
             'amount' => 500,
             'payment_type' => 'cash',
         ])->assertSessionHasNoErrors();
-        $this->post(route('accounting.payroll.advances.store', $run), [
-            'employee_id' => $this->employee->id,
-            'payment_date' => '2026-02-10',
-            'amount' => 30,
-            'payment_type' => 'cash',
-        ])->assertSessionHasErrors('amount');
 
-        $advance = $run->advances()->firstOrFail();
-        $this->post(route('accounting.payroll.advances.cancel', [$run, $advance]))
+        $advance = SalaryAdvance::firstOrFail();
+        $this->post(route('accounting.salary-advances.cancel', $advance))
             ->assertSessionHasNoErrors();
 
         $this->assertSame('cancelled', $advance->fresh()->status);
-        $this->assertSame(0.0, $run->fresh()->load('advances')->total_advances);
         $this->assertSame(2, JournalEntry::count());
         $this->assertSame('reversed', JournalEntry::where('posting_type', 'salary_advance')->firstOrFail()->status);
+    }
+
+    public function test_payroll_cannot_be_below_advances_recorded_before_month_end(): void
+    {
+        $this->post(route('accounting.salary-advances.store'), [
+            'employee_id' => $this->employee->id,
+            'payment_date' => '2026-02-07',
+            'amount' => 521,
+            'payment_type' => 'cash',
+        ])->assertSessionHasNoErrors();
+
+        $this->post(route('accounting.payroll.store'), $this->payrollData())
+            ->assertSessionHasErrors('lines');
+
+        $this->assertDatabaseCount('payroll_runs', 0);
     }
 
     public function test_cancelling_paid_payroll_reverses_accrual_and_payment(): void
@@ -187,6 +219,25 @@ class PayrollTest extends TestCase
         $this->assertSame(4, JournalEntry::count());
         $this->assertSame(2, JournalEntry::where('status', 'reversed')->count());
         $this->assertDatabaseHas('audit_logs', ['action' => 'payroll_cancelled', 'model_id' => $run->id]);
+    }
+
+    public function test_cancelling_payroll_keeps_paid_advances_for_a_replacement_payroll(): void
+    {
+        $this->post(route('accounting.salary-advances.store'), [
+            'employee_id' => $this->employee->id,
+            'payment_date' => '2026-02-07',
+            'amount' => 80,
+            'payment_type' => 'cash',
+        ])->assertSessionHasNoErrors();
+
+        $run = $this->createDraftPayroll();
+        $this->post(route('accounting.payroll.post', $run))->assertSessionHasNoErrors();
+        $this->post(route('accounting.payroll.cancel', $run))->assertSessionHasNoErrors();
+
+        $advance = SalaryAdvance::firstOrFail();
+        $this->assertSame('posted', $advance->status);
+        $this->assertNull($advance->payroll_run_id);
+        $this->assertSame('posted', JournalEntry::where('posting_type', 'salary_advance')->firstOrFail()->status);
     }
 
     public function test_locked_period_prevents_payroll_posting(): void
@@ -245,7 +296,8 @@ class PayrollTest extends TestCase
                 'employee_id' => $this->employee->id,
                 'gross_salary' => 500,
                 'allowances' => 50,
-                'deductions' => 25,
+                'employee_social_security' => 25,
+                'deductions' => 5,
                 'employer_social_security' => 10,
             ]],
         ];

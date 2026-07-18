@@ -98,7 +98,7 @@ class ExpenseVoucherController extends Controller
     public function show(ExpenseVoucher $expense)
     {
         return view('accounting.expenses.show', [
-            'voucher' => $expense->load(['category.defaultAccount', 'cashAccount', 'bankAccount', 'payableAccount', 'creator', 'editor']),
+            'voucher' => $expense->load(['category.defaultAccount', 'cashAccount', 'bankAccount', 'chequeBankAccount', 'payableAccount', 'creator', 'editor']),
             'journalEntries' => JournalEntry::with('lines')
                 ->where('source_module', 'accounting')
                 ->where('source_type', class_basename($expense))
@@ -111,6 +111,7 @@ class ExpenseVoucherController extends Controller
     public function edit(ExpenseVoucher $expense)
     {
         abort_if($expense->status !== 'posted', 422, 'Cancelled expense vouchers cannot be edited.');
+        abort_if($expense->payment_type === 'cheque' && $expense->cheque_status !== 'pending', 422, __('Settled cheques must be corrected from the cheque settlement page.'));
 
         return view('accounting.expenses.form', $this->formData($expense));
     }
@@ -119,6 +120,9 @@ class ExpenseVoucherController extends Controller
     {
         if ($expense->status !== 'posted') {
             throw ValidationException::withMessages(['status' => __('Cancelled expense vouchers cannot be edited.')]);
+        }
+        if ($expense->payment_type === 'cheque' && $expense->cheque_status !== 'pending') {
+            throw ValidationException::withMessages(['cheque_status' => __('Settled cheques must be corrected from the cheque settlement page.')]);
         }
 
         $data = $this->validated($request);
@@ -136,6 +140,9 @@ class ExpenseVoucherController extends Controller
     {
         if ($expense->status === 'cancelled') {
             return back()->with('status', __('Expense voucher already cancelled.'));
+        }
+        if ($expense->payment_type === 'cheque' && $expense->cheque_status !== 'pending') {
+            throw ValidationException::withMessages(['cheque_status' => __('Settled cheques must be corrected from the cheque settlement page.')]);
         }
 
         DB::transaction(function () use ($expense, $request, $posting, $audit) {
@@ -183,6 +190,7 @@ class ExpenseVoucherController extends Controller
 
         $data['amount'] = $amount;
         $data['paid_amount'] = $paidAmount;
+        $data['cheque_status'] = 'pending';
 
         return $data;
     }

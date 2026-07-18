@@ -7,6 +7,7 @@ use App\Models\CashAccount;
 use App\Models\Employee;
 use App\Models\JournalEntry;
 use App\Models\PayrollRun;
+use App\Models\SalaryAdvance;
 use App\Services\AccountingPostingService;
 use App\Services\AuditService;
 use App\Services\SimpleXlsxExporter;
@@ -43,6 +44,7 @@ class PayrollController extends Controller
             $run = PayrollRun::create($runData + ['status' => 'draft', 'created_by' => $request->user()->id]);
             $run->lines()->createMany($lines);
             $this->recalculateTotals($run);
+            $this->syncSalaryAdvances($run);
             $audit->record('payroll_created', $run, null, $run->fresh('lines')->toArray());
 
             return $run;
@@ -56,7 +58,8 @@ class PayrollController extends Controller
         return view('accounting.payroll.show', [
             'payroll' => $payroll->load([
                 'lines.employee', 'advances.employee', 'advances.cashAccount', 'advances.bankAccount',
-                'advances.creator', 'cashAccount', 'bankAccount', 'creator', 'poster', 'payer',
+                'advances.creator', 'cashAccount', 'bankAccount', 'socialSecurityCashAccount',
+                'socialSecurityBankAccount', 'creator', 'poster', 'payer',
             ]),
             'journalEntries' => JournalEntry::with('lines')
                 ->where('source_module', 'accounting')
@@ -94,6 +97,7 @@ class PayrollController extends Controller
             $payroll->lines()->delete();
             $payroll->lines()->createMany($lines);
             $this->recalculateTotals($payroll);
+            $this->syncSalaryAdvances($payroll);
             $audit->record('payroll_updated', $payroll, $before, $payroll->fresh('lines')->toArray());
         });
 
@@ -147,6 +151,37 @@ class PayrollController extends Controller
         return back()->with('status', __('Payroll payment posted.'));
     }
 
+    public function paySocialSecurity(PayrollRun $payroll, Request $request, AccountingPostingService $posting, AuditService $audit)
+    {
+        if (! in_array($payroll->status, ['posted', 'paid'], true)) {
+            throw ValidationException::withMessages(['status' => __('Only posted or paid payroll can have social security settled.')]);
+        }
+        if ($payroll->social_security_paid_at) {
+            throw ValidationException::withMessages(['status' => __('Social security is already settled for this payroll.')]);
+        }
+
+        $data = $request->validate([
+            'social_security_payment_date' => ['required', 'date'],
+            'social_security_payment_type' => ['required', 'in:cash,bank_transfer'],
+            'social_security_cash_account_id' => ['nullable', 'exists:cash_accounts,id'],
+            'social_security_bank_account_id' => ['nullable', 'exists:bank_accounts,id'],
+            'social_security_payment_reference' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        DB::transaction(function () use ($payroll, $data, $request, $posting, $audit) {
+            $before = $payroll->toArray();
+            $payroll->update($data + ['updated_by' => $request->user()->id]);
+            $posting->postPayrollSocialSecurityPayment($payroll->fresh(), $request->user());
+            $payroll->update([
+                'social_security_paid_at' => now(),
+                'social_security_paid_by' => $request->user()->id,
+            ]);
+            $audit->record('payroll_social_security_paid', $payroll, $before, $payroll->fresh()->toArray());
+        });
+
+        return back()->with('status', __('Social security payment posted.'));
+    }
+
     public function cancel(PayrollRun $payroll, Request $request, AccountingPostingService $posting, AuditService $audit)
     {
         if ($payroll->status === 'cancelled') {
@@ -158,11 +193,7 @@ class PayrollController extends Controller
             if (in_array($payroll->status, ['draft', 'posted', 'paid'], true)) {
                 $posting->reversePayrollRun($payroll, $request->user());
             }
-            $payroll->advances()->where('status', 'posted')->update([
-                'status' => 'cancelled',
-                'cancelled_at' => now(),
-                'cancelled_by' => $request->user()->id,
-            ]);
+            $payroll->advances()->where('status', 'posted')->update(['payroll_run_id' => null]);
             $payroll->update(['status' => 'cancelled', 'updated_by' => $request->user()->id]);
             $audit->record('payroll_cancelled', $payroll, $before, $payroll->fresh()->toArray());
         });
@@ -184,6 +215,7 @@ class PayrollController extends Controller
                     $line->employee->localized_name,
                     number_format((float) $line->gross_salary, 3, '.', ''),
                     number_format((float) $line->allowances, 3, '.', ''),
+                    number_format((float) $line->employee_social_security, 3, '.', ''),
                     number_format((float) $line->deductions, 3, '.', ''),
                     number_format((float) $line->employer_social_security, 3, '.', ''),
                     number_format((float) $line->net_salary, 3, '.', ''),
@@ -196,8 +228,9 @@ class PayrollController extends Controller
 
         return $exporter->download('payroll-'.now()->format('Y-m-d').'.xlsx', [
             __('Period'), __('Employee'), __('Gross Salary'), __('Allowances'),
-            __('Deductions'), __('Employer Social Security'), __('Net Salary'),
-            __('Advances'), __('Remaining'), __('Status'),
+            __('Employee Social Security'), __('Other Deductions'),
+            __('Employer Social Security'), __('Net Salary'), __('Advances'),
+            __('Remaining'), __('Status'),
         ], $rows->all(), [[__('Payroll Report'), now()->toDateString()]]);
     }
 
@@ -213,6 +246,7 @@ class PayrollController extends Controller
             'lines.*.employee_id' => ['required', 'exists:employees,id'],
             'lines.*.gross_salary' => ['nullable', 'numeric', 'min:0'],
             'lines.*.allowances' => ['nullable', 'numeric', 'min:0'],
+            'lines.*.employee_social_security' => ['nullable', 'numeric', 'min:0'],
             'lines.*.deductions' => ['nullable', 'numeric', 'min:0'],
             'lines.*.employer_social_security' => ['nullable', 'numeric', 'min:0'],
             'lines.*.notes' => ['nullable', 'string'],
@@ -231,8 +265,10 @@ class PayrollController extends Controller
             ->map(function ($line) {
                 $gross = round((float) ($line['gross_salary'] ?? 0), 3);
                 $allowances = round((float) ($line['allowances'] ?? 0), 3);
-                $deductions = round((float) ($line['deductions'] ?? 0), 3);
-                if (($gross + $allowances) <= 0 || $deductions > ($gross + $allowances)) {
+                $employeeSocial = round((float) ($line['employee_social_security'] ?? 0), 3);
+                $otherDeductions = round((float) ($line['deductions'] ?? 0), 3);
+                $totalDeductions = round($employeeSocial + $otherDeductions, 3);
+                if (($gross + $allowances) <= 0 || $totalDeductions > ($gross + $allowances)) {
                     throw ValidationException::withMessages(['lines' => __('Payroll deductions cannot exceed gross salary plus allowances.')]);
                 }
 
@@ -240,9 +276,10 @@ class PayrollController extends Controller
                     'employee_id' => $line['employee_id'],
                     'gross_salary' => $gross,
                     'allowances' => $allowances,
-                    'deductions' => $deductions,
+                    'employee_social_security' => $employeeSocial,
+                    'deductions' => $otherDeductions,
                     'employer_social_security' => round((float) ($line['employer_social_security'] ?? 0), 3),
-                    'net_salary' => round($gross + $allowances - $deductions, 3),
+                    'net_salary' => round($gross + $allowances - $totalDeductions, 3),
                     'notes' => $line['notes'] ?? null,
                 ];
             })->values()->all();
@@ -250,22 +287,7 @@ class PayrollController extends Controller
         if ($lines === []) {
             throw ValidationException::withMessages(['lines' => __('Select at least one employee for payroll.')]);
         }
-        if ($payroll) {
-            $netByEmployee = collect($lines)->pluck('net_salary', 'employee_id');
-            $payroll->advances()
-                ->where('status', 'posted')
-                ->selectRaw('employee_id, SUM(amount) as total')
-                ->groupBy('employee_id')
-                ->get()
-                ->each(function ($advance) use ($netByEmployee) {
-                    if (! $netByEmployee->has($advance->employee_id)
-                        || (float) $advance->total > (float) $netByEmployee[$advance->employee_id]) {
-                        throw ValidationException::withMessages([
-                            'lines' => __('Payroll cannot be reduced below existing salary advances.'),
-                        ]);
-                    }
-                });
-        }
+        $this->assertAdvanceLimits($data['period_year'], $data['period_month'], $lines);
 
         return [[
             'period_year' => $data['period_year'],
@@ -282,9 +304,43 @@ class PayrollController extends Controller
             'total_gross' => round((float) $lines->sum('gross_salary'), 3),
             'total_allowances' => round((float) $lines->sum('allowances'), 3),
             'total_deductions' => round((float) $lines->sum('deductions'), 3),
+            'total_employee_social_security' => round((float) $lines->sum('employee_social_security'), 3),
             'total_employer_social_security' => round((float) $lines->sum('employer_social_security'), 3),
             'total_net' => round((float) $lines->sum('net_salary'), 3),
         ]);
+    }
+
+    private function assertAdvanceLimits(int $year, int $month, array $lines): void
+    {
+        $netByEmployee = collect($lines)->pluck('net_salary', 'employee_id');
+
+        SalaryAdvance::whereYear('payment_date', $year)
+            ->whereMonth('payment_date', $month)
+            ->where('status', 'posted')
+            ->selectRaw('employee_id, SUM(amount) as total')
+            ->groupBy('employee_id')
+            ->get()
+            ->each(function ($advance) use ($netByEmployee) {
+                if (! $netByEmployee->has($advance->employee_id)
+                    || (float) $advance->total > (float) $netByEmployee[$advance->employee_id]) {
+                    throw ValidationException::withMessages([
+                        'lines' => __('Payroll must include every employee with advances, and net salary cannot be below advances.'),
+                    ]);
+                }
+            });
+    }
+
+    private function syncSalaryAdvances(PayrollRun $payroll): void
+    {
+        $employeeIds = $payroll->lines()->pluck('employee_id');
+
+        $payroll->advances()->where('status', 'posted')->update(['payroll_run_id' => null]);
+        SalaryAdvance::whereNull('payroll_run_id')
+            ->whereYear('payment_date', $payroll->period_year)
+            ->whereMonth('payment_date', $payroll->period_month)
+            ->where('status', 'posted')
+            ->whereIn('employee_id', $employeeIds)
+            ->update(['payroll_run_id' => $payroll->id]);
     }
 
     private function assertDraft(PayrollRun $payroll): void

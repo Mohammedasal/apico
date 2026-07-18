@@ -4,7 +4,7 @@
 <div class="section-title">
     <div><h1>{{ __('Expense Voucher') }} {{ $voucher->voucher_no }}</h1><div class="muted">{{ $voucher->expense_date->toDateString() }} | {{ __(ucfirst($voucher->status)) }}</div></div>
     <div style="display:flex;gap:8px">
-        @if ($voucher->status === 'posted')
+        @if ($voucher->status === 'posted' && ($voucher->payment_type !== 'cheque' || $voucher->cheque_status === 'pending'))
             <a class="button" href="{{ route('accounting.expenses.edit', $voucher) }}">{{ __('Edit') }}</a>
             <form method="post" action="{{ route('accounting.expenses.cancel', $voucher) }}" onsubmit="return confirm('{{ __('Cancel this expense voucher and reverse its journal?') }}')">@csrf<button>{{ __('Cancel Voucher') }}</button></form>
         @endif
@@ -19,6 +19,11 @@
 <div class="card">
     <div><strong>{{ __('Payment Status') }}:</strong> {{ __(ucwords(str_replace('_', ' ', $voucher->payment_status))) }}</div>
     <div><strong>{{ __('Payment Type') }}:</strong> {{ __(ucwords(str_replace('_', ' ', $voucher->payment_type))) }}</div>
+    @if ($voucher->payment_type === 'cheque')
+        <div><strong>{{ __('Cheque Status') }}:</strong> {{ __(ucfirst($voucher->cheque_status)) }}</div>
+        <div><strong>{{ __('Settlement Date') }}:</strong> {{ $voucher->cheque_settlement_date?->toDateString() ?? '-' }}</div>
+        <div><strong>{{ __('Settlement Bank') }}:</strong> {{ $voucher->chequeBankAccount?->localized_name ?? '-' }}</div>
+    @endif
     <div><strong>{{ __('Reference') }}:</strong> {{ $voucher->reference ?: '-' }}</div>
     <div><strong>{{ __('Notes') }}:</strong> {{ $voucher->notes ?: '-' }}</div>
 </div>

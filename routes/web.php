@@ -56,12 +56,14 @@ Route::middleware('auth')->group(function () {
         ->middleware('role:admin')
         ->name('production.expenses.store');
 
-    Route::get('/cheques-out', [ChequeOutController::class, 'index'])->middleware('role:admin,data_entry')->name('cheques-out.index');
-    Route::post('/cheques-out', [ChequeOutController::class, 'store'])->middleware('role:admin,data_entry')->name('cheques-out.store');
-    Route::get('/cheques-out/{chequeOut}/edit', [ChequeOutController::class, 'edit'])->middleware('role:admin,data_entry')->name('cheques-out.edit');
-    Route::put('/cheques-out/{chequeOut}', [ChequeOutController::class, 'update'])->middleware('role:admin,data_entry')->name('cheques-out.update');
-    Route::get('/cheques-in', [ChequeInController::class, 'index'])->middleware('role:admin,data_entry')->name('cheques-in.index');
-    Route::put('/cheques-in/{payment}', [ChequeInController::class, 'update'])->middleware('role:admin,data_entry')->name('cheques-in.update');
+    Route::get('/cheques-out', [ChequeOutController::class, 'index'])->middleware('role:admin,data_entry,accountant')->name('cheques-out.index');
+    Route::post('/cheques-out', [ChequeOutController::class, 'store'])->middleware('role:admin,data_entry,accountant')->name('cheques-out.store');
+    Route::put('/cheques-out/supplier/{supplierPayment}', [ChequeOutController::class, 'updateSupplier'])->middleware('role:admin,data_entry,accountant')->name('cheques-out.supplier.update');
+    Route::put('/cheques-out/expense/{expense}', [ChequeOutController::class, 'updateExpense'])->middleware('role:admin,data_entry,accountant')->name('cheques-out.expense.update');
+    Route::get('/cheques-out/{chequeOut}/edit', [ChequeOutController::class, 'edit'])->middleware('role:admin,data_entry,accountant')->name('cheques-out.edit');
+    Route::put('/cheques-out/{chequeOut}', [ChequeOutController::class, 'update'])->middleware('role:admin,data_entry,accountant')->name('cheques-out.update');
+    Route::get('/cheques-in', [ChequeInController::class, 'index'])->middleware('role:admin,data_entry,accountant')->name('cheques-in.index');
+    Route::put('/cheques-in/{payment}', [ChequeInController::class, 'update'])->middleware('role:admin,data_entry,accountant')->name('cheques-in.update');
 
     Route::get('/customers/{customer}/export', [CustomerController::class, 'export'])->middleware('role:admin,viewer')->name('customers.export');
     Route::resource('customers', CustomerController::class)->only(['index', 'show']);
@@ -108,13 +110,16 @@ Route::middleware('auth')->group(function () {
         Route::post('/expenses/{expense}/cancel', [ExpenseVoucherController::class, 'cancel'])->name('expenses.cancel');
         Route::resource('expense-categories', ExpenseCategoryController::class)->except(['show', 'destroy']);
         Route::resource('employees', EmployeeController::class)->except(['show', 'destroy']);
+        Route::get('/salary-advances', [SalaryAdvanceController::class, 'index'])->name('salary-advances.index');
+        Route::get('/salary-advances/create', [SalaryAdvanceController::class, 'create'])->name('salary-advances.create');
+        Route::post('/salary-advances', [SalaryAdvanceController::class, 'store'])->name('salary-advances.store');
+        Route::post('/salary-advances/{advance}/cancel', [SalaryAdvanceController::class, 'cancel'])->name('salary-advances.cancel');
         Route::get('/payroll/export', [PayrollController::class, 'export'])->name('payroll.export');
         Route::resource('payroll', PayrollController::class)->except(['destroy']);
         Route::post('/payroll/{payroll}/post', [PayrollController::class, 'post'])->name('payroll.post');
         Route::post('/payroll/{payroll}/pay', [PayrollController::class, 'pay'])->name('payroll.pay');
+        Route::post('/payroll/{payroll}/pay-social-security', [PayrollController::class, 'paySocialSecurity'])->name('payroll.pay-social-security');
         Route::post('/payroll/{payroll}/cancel', [PayrollController::class, 'cancel'])->name('payroll.cancel');
-        Route::post('/payroll/{payroll}/advances', [SalaryAdvanceController::class, 'store'])->name('payroll.advances.store');
-        Route::post('/payroll/{payroll}/advances/{advance}/cancel', [SalaryAdvanceController::class, 'cancel'])->name('payroll.advances.cancel');
         Route::get('/journals', [JournalEntryController::class, 'index'])->name('journals.index');
         Route::get('/journals/create', [JournalEntryController::class, 'create'])->name('journals.create');
         Route::post('/journals', [JournalEntryController::class, 'store'])->name('journals.store');

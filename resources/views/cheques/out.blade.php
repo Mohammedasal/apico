@@ -27,7 +27,7 @@
 </form>
 @endif
 
-<div class="section-title"><h2>{{ __('Outgoing Cheques') }}</h2></div>
+<div class="section-title"><div><h2>{{ __('Outgoing Cheques') }}</h2><div class="muted">{{ __('Monitoring-only cheques do not create accounting journals.') }}</div></div></div>
 <div class="table-wrap">
     <table>
         <thead><tr><th>{{ __('Due Date') }}</th><th>{{ __('Payee') }}</th><th>{{ __('Bank') }}</th><th>{{ __('Cheque No.') }}</th><th>{{ __('Amount') }}</th><th>{{ __('Status') }}</th><th>{{ __('Notes') }}</th><th>{{ __('Audit') }}</th><th></th></tr></thead>
@@ -62,7 +62,7 @@
 <div class="section-title"><h2>{{ __('Supplier Payment Cheques') }}</h2></div>
 <div class="table-wrap">
     <table>
-        <thead><tr><th>{{ __('Due Date') }}</th><th>{{ __('Supplier') }}</th><th>{{ __('Payment Date') }}</th><th>{{ __('Bank') }}</th><th>{{ __('Cheque No.') }}</th><th>{{ __('Amount') }}</th><th>{{ __('Status') }}</th><th>{{ __('Notes') }}</th><th>{{ __('Audit') }}</th><th></th></tr></thead>
+        <thead><tr><th>{{ __('Due Date') }}</th><th>{{ __('Supplier') }}</th><th>{{ __('Payment Date') }}</th><th>{{ __('Bank') }}</th><th>{{ __('Cheque No.') }}</th><th>{{ __('Amount') }}</th><th>{{ __('Status') }}</th><th>{{ __('Settlement') }}</th><th>{{ __('Notes') }}</th><th>{{ __('Audit') }}</th><th></th></tr></thead>
         <tbody>
         @forelse ($supplierCheques as $payment)
             <tr>
@@ -73,6 +73,7 @@
                 <td>{{ $payment->reference_no }}</td>
                 <td>{{ number_format($payment->amount, 3) }}</td>
                 <td>{{ __(ucfirst($payment->cheque_status ?? 'pending')) }}</td>
+                <td><div>{{ $payment->cheque_settlement_date?->toDateString() ?? '-' }}</div><div class="muted">{{ $payment->chequeBankAccount?->localized_name ?? '-' }}</div></td>
                 <td>{{ $payment->notes }}</td>
                 <td>
                     <div>{{ __('Created') }} {{ $payment->created_at?->format('Y-m-d H:i') }}</div>
@@ -82,10 +83,51 @@
                         <div class="muted">{{ __('By') }} {{ $payment->editor?->name ?? __('System') }}</div>
                     @endif
                 </td>
-                <td>@if (auth()->user()?->canWriteOperationalData())<a href="{{ route('supplier-payments.edit', $payment) }}">{{ __('Edit Payment') }}</a>@endif</td>
+                <td>
+                    <form method="post" action="{{ route('cheques-out.supplier.update', $payment) }}" class="filters" style="padding:0;border:0;background:transparent;grid-template-columns:minmax(105px,1fr) minmax(135px,1fr) minmax(150px,1.3fr) auto;min-width:550px">
+                        @csrf @method('put')
+                        <select name="cheque_status"><option value="pending" @selected($payment->cheque_status === 'pending')>{{ __('Pending') }}</option><option value="cleared" @selected($payment->cheque_status === 'cleared')>{{ __('Cleared') }}</option><option value="cancelled" @selected($payment->cheque_status === 'cancelled')>{{ __('Cancelled') }}</option></select>
+                        <input type="date" name="cheque_settlement_date" value="{{ $payment->cheque_settlement_date?->toDateString() }}" title="{{ __('Settlement Date') }}">
+                        <select class="searchable-select" name="cheque_bank_account_id" title="{{ __('Settlement Bank') }}"><option value="">{{ __('Select Bank') }}</option>@foreach ($bankAccounts as $account)<option value="{{ $account->id }}" @selected($payment->cheque_bank_account_id === $account->id)>{{ $account->localized_name }}</option>@endforeach</select>
+                        <button>{{ __('Save') }}</button>
+                    </form>
+                    @if ($payment->cheque_status === 'pending' && auth()->user()?->canWriteOperationalData())<a href="{{ route('supplier-payments.edit', $payment) }}">{{ __('Edit Payment') }}</a>@endif
+                </td>
             </tr>
         @empty
-            <tr><td colspan="10">{{ __('No supplier payment cheques.') }}</td></tr>
+            <tr><td colspan="11">{{ __('No supplier payment cheques.') }}</td></tr>
+        @endforelse
+        </tbody>
+    </table>
+</div>
+
+<div class="section-title"><h2>{{ __('Expense Cheques') }}</h2></div>
+<div class="table-wrap">
+    <table>
+        <thead><tr><th>{{ __('Due Date') }}</th><th>{{ __('Voucher No.') }}</th><th>{{ __('Category') }}</th><th>{{ __('Expense Date') }}</th><th>{{ __('Cheque No.') }}</th><th>{{ __('Amount') }}</th><th>{{ __('Status') }}</th><th>{{ __('Settlement') }}</th><th></th></tr></thead>
+        <tbody>
+        @forelse ($expenseCheques as $expense)
+            <tr>
+                <td>{{ $expense->cheque_due_date?->toDateString() ?? '-' }}</td>
+                <td><a href="{{ route('accounting.expenses.show', $expense) }}">{{ $expense->voucher_no }}</a></td>
+                <td>{{ $expense->category?->localized_name }}</td>
+                <td>{{ $expense->expense_date->toDateString() }}</td>
+                <td>{{ $expense->reference }}</td>
+                <td>{{ number_format($expense->paid_amount, 3) }}</td>
+                <td>{{ __(ucfirst($expense->cheque_status ?? 'pending')) }}</td>
+                <td><div>{{ $expense->cheque_settlement_date?->toDateString() ?? '-' }}</div><div class="muted">{{ $expense->chequeBankAccount?->localized_name ?? '-' }}</div></td>
+                <td>
+                    <form method="post" action="{{ route('cheques-out.expense.update', $expense) }}" class="filters" style="padding:0;border:0;background:transparent;grid-template-columns:minmax(105px,1fr) minmax(135px,1fr) minmax(150px,1.3fr) auto;min-width:550px">
+                        @csrf @method('put')
+                        <select name="cheque_status"><option value="pending" @selected($expense->cheque_status === 'pending')>{{ __('Pending') }}</option><option value="cleared" @selected($expense->cheque_status === 'cleared')>{{ __('Cleared') }}</option><option value="cancelled" @selected($expense->cheque_status === 'cancelled')>{{ __('Cancelled') }}</option></select>
+                        <input type="date" name="cheque_settlement_date" value="{{ $expense->cheque_settlement_date?->toDateString() }}" title="{{ __('Settlement Date') }}">
+                        <select class="searchable-select" name="cheque_bank_account_id" title="{{ __('Settlement Bank') }}"><option value="">{{ __('Select Bank') }}</option>@foreach ($bankAccounts as $account)<option value="{{ $account->id }}" @selected($expense->cheque_bank_account_id === $account->id)>{{ $account->localized_name }}</option>@endforeach</select>
+                        <button>{{ __('Save') }}</button>
+                    </form>
+                </td>
+            </tr>
+        @empty
+            <tr><td colspan="9">{{ __('No expense cheques.') }}</td></tr>
         @endforelse
         </tbody>
     </table>

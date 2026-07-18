@@ -51,15 +51,20 @@ class SupplierPaymentController extends Controller
 
     public function update(Request $request, SupplierPayment $supplierPayment, AccountingPostingService $posting)
     {
+        if ($supplierPayment->payment_type === 'cheque' && $supplierPayment->cheque_status !== 'pending') {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'cheque_status' => __('Settled cheques must be corrected from the cheque settlement page.'),
+            ]);
+        }
         DB::transaction(function () use ($request, $supplierPayment, $posting) {
-            $supplierPayment->update($this->validated($request) + ['updated_by' => $request->user()->id]);
+            $supplierPayment->update($this->validated($request, $supplierPayment) + ['updated_by' => $request->user()->id]);
             $posting->repostOperational($supplierPayment->fresh(), $request->user());
         });
 
         return redirect()->route('supplier-payments.index')->with('status', 'Supplier payment updated.');
     }
 
-    private function validated(Request $request): array
+    private function validated(Request $request, ?SupplierPayment $payment = null): array
     {
         $data = $request->validate([
             'date' => ['required', 'date'],
@@ -72,11 +77,11 @@ class SupplierPaymentController extends Controller
             'bank_account_id' => ['nullable', 'exists:bank_accounts,id'],
             'cash_account_id' => ['nullable', 'exists:cash_accounts,id'],
             'cheque_due_date' => ['nullable', 'date'],
-            'cheque_status' => ['nullable', 'in:pending,collected,bounced,cancelled'],
+            'cheque_status' => ['nullable', 'in:pending,cleared,cancelled'],
             'notes' => ['nullable', 'string'],
         ]);
 
-        $data['cheque_status'] = $data['payment_type'] === 'cheque' ? ($data['cheque_status'] ?? 'pending') : 'pending';
+        $data['cheque_status'] = $data['payment_type'] === 'cheque' ? ($payment?->cheque_status ?? 'pending') : 'pending';
         $data['cheque_due_date'] = $data['payment_type'] === 'cheque' ? ($data['cheque_due_date'] ?? null) : null;
 
         return $data;
