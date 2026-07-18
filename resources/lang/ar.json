@@ -589,5 +589,20 @@
     "Only supplier cheque payments can be settled.": "يمكن تسوية دفعات الموردين بالشيكات فقط.",
     "Only cheque expense vouchers can be settled.": "يمكن تسوية سندات المصاريف المدفوعة بالشيكات فقط.",
     "A settlement date is required for this cheque status.": "تاريخ التسوية مطلوب لهذه الحالة.",
-    "Select the bank account used for cheque settlement.": "اختر الحساب البنكي المستخدم لتسوية الشيك."
+    "Select the bank account used for cheque settlement.": "اختر الحساب البنكي المستخدم لتسوية الشيك.",
+    "Trial Balance": "ميزان المراجعة",
+    "Trial Balance Report": "تقرير ميزان المراجعة",
+    "Opening balances, period movement, and closing balances for posted journals.": "الأرصدة الافتتاحية وحركة الفترة والأرصدة الختامية للقيود المرحلة.",
+    "Account Type": "نوع الحساب",
+    "Opening Debit": "مدين افتتاحي",
+    "Opening Credit": "دائن افتتاحي",
+    "Period Debit": "حركة مدين",
+    "Period Credit": "حركة دائن",
+    "Closing Debit": "رصيد مدين",
+    "Closing Credit": "رصيد دائن",
+    "Include Zero Balances": "إظهار الأرصدة الصفرية",
+    "Balance Difference": "فرق الميزان",
+    "Trial balance is balanced.": "ميزان المراجعة متوازن.",
+    "Trial balance is not balanced.": "ميزان المراجعة غير متوازن.",
+    "No trial balance activity for this period.": "لا توجد حركة في ميزان المراجعة لهذه الفترة."
 }

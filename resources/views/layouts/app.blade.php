@@ -169,6 +169,7 @@
                 <a @class(['active' => request()->routeIs('accounting.periods.*')]) href="{{ route('accounting.periods.index') }}">{{ __('Accounting Periods') }}</a>
             @endif
             <a @class(['active' => request()->routeIs('accounting.journals.*')]) href="{{ route('accounting.journals.index') }}">{{ __('Journal Entries') }}</a>
+            <a @class(['active' => request()->routeIs('accounting.reports.trial-balance*')]) href="{{ route('accounting.reports.trial-balance') }}">{{ __('Trial Balance') }}</a>
             <a @class(['active' => request()->routeIs('accounting.expenses.*')]) href="{{ route('accounting.expenses.index') }}">{{ __('Expenses') }}</a>
             <a @class(['active' => request()->routeIs('accounting.expense-categories.*')]) href="{{ route('accounting.expense-categories.index') }}">{{ __('Expense Categories') }}</a>
             <a @class(['active' => request()->routeIs('accounting.salary-advances.*')]) href="{{ route('accounting.salary-advances.index') }}">{{ __('Salary Advances') }}</a>

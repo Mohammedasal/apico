@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AccountingDashboardController;
 use App\Http\Controllers\AccountingPeriodController;
+use App\Http\Controllers\AccountingReportController;
 use App\Http\Controllers\AccountMappingController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ChartOfAccountController;
@@ -125,6 +126,8 @@ Route::middleware('auth')->group(function () {
         Route::post('/journals', [JournalEntryController::class, 'store'])->name('journals.store');
         Route::get('/journals/{journal}', [JournalEntryController::class, 'show'])->name('journals.show');
         Route::post('/journals/{journal}/reverse', [JournalEntryController::class, 'reverse'])->name('journals.reverse');
+        Route::get('/reports/trial-balance', [AccountingReportController::class, 'trialBalance'])->name('reports.trial-balance');
+        Route::get('/reports/trial-balance/export', [AccountingReportController::class, 'trialBalanceExport'])->name('reports.trial-balance.export');
     });
 
     Route::prefix('accounting')->name('accounting.')->middleware('role:admin')->group(function () {
