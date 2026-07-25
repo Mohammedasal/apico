@@ -75,6 +75,45 @@
         <div class="card kpi-card"><div class="muted">{{ __('Recycle Out Rows') }}</div><div class="kpi">{{ $import['totals']['recycle_out_rows'] }}</div></div>
         <div class="card kpi-card"><div class="muted">{{ __('Payment Rows') }}</div><div class="kpi">{{ $import['totals']['payment_rows'] }}</div></div>
         <div class="card kpi-card"><div class="muted">{{ __('Stock Sale Rows') }}</div><div class="kpi">{{ $import['totals']['stock_sale_rows'] }}</div></div>
+        <div class="card kpi-card"><div class="muted">{{ __('Skipped Invalid Rows') }}</div><div class="kpi">{{ $import['skipped_rows'] ?? 0 }}</div></div>
+    </div>
+@endif
+
+@if (session('import_issues'))
+    <div class="section-title">
+        <div>
+            <h2>{{ __('Transactions Requiring Manual Correction') }}</h2>
+            <div class="muted">{{ __('These rows were not imported. Correct them manually and add them from the matching transaction page.') }}</div>
+        </div>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>{{ __('Client') }}</th><th>{{ __('Type') }}</th><th>{{ __('Excel Row') }}</th><th>{{ __('Field') }}</th><th>{{ __('Wrong Value') }}</th><th>{{ __('Reason') }}</th><th>{{ __('Transaction') }}</th><th>{{ __('Action') }}</th></tr></thead>
+            <tbody>
+            @foreach (session('import_issues') as $issue)
+                @php
+                    $manualModule = match ($issue['type']) {
+                        'Purchase' => 'stock-purchases',
+                        'Recycle In' => 'recycle-in',
+                        'Recycle Out' => 'recycle-out',
+                        'Payment' => 'payments',
+                        'Stock Sale' => 'stock-sales',
+                        default => null,
+                    };
+                @endphp
+                <tr>
+                    <td>{{ $issue['customer'] }}</td>
+                    <td>{{ __($issue['type']) }}</td>
+                    <td>{{ $issue['row'] }}</td>
+                    <td>{{ __($issue['field']) }}</td>
+                    <td class="amount-negative">{{ $issue['value'] }}</td>
+                    <td>{{ __($issue['reason']) }}</td>
+                    <td>{{ $issue['transaction'] ?: '-' }}</td>
+                    <td>@if ($manualModule)<a class="button" href="{{ route('operations.create', $manualModule) }}">{{ __('Add Manually') }}</a>@endif</td>
+                </tr>
+            @endforeach
+            </tbody>
+        </table>
     </div>
 @endif
 

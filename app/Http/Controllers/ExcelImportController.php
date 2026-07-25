@@ -29,7 +29,6 @@ class ExcelImportController extends Controller
             'apico-sales-'.now()->format('Y-m-d-His').'.xlsx'
         );
         $fullPath = Storage::path($path);
-        $dateIssues = $importer->dateIssues($fullPath);
         $this->backupDatabase();
 
         $result = DB::transaction(function () use ($importer, $fullPath, $request) {
@@ -44,11 +43,19 @@ class ExcelImportController extends Controller
 
             return $result;
         });
+        $dateIssues = $importer->dateIssues($fullPath);
+        $skippedRows = (int) ($result['skipped_rows'] ?? 0);
+        $status = 'Sales sheet imported. Existing imported transactions were flushed first.';
+
+        if ($skippedRows > 0) {
+            $status .= " {$skippedRows} invalid transaction row(s) were skipped and listed for manual correction.";
+        }
 
         return redirect()
             ->route('dashboard')
-            ->with('status', 'Sales sheet imported. Existing imported transactions were flushed first.')
+            ->with('status', $status)
             ->with('import_result', $result)
+            ->with('import_issues', $result['issues'] ?? [])
             ->with('date_issues', $dateIssues);
     }
 

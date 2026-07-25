@@ -604,5 +604,21 @@
     "Balance Difference": "فرق الميزان",
     "Trial balance is balanced.": "ميزان المراجعة متوازن.",
     "Trial balance is not balanced.": "ميزان المراجعة غير متوازن.",
-    "No trial balance activity for this period.": "لا توجد حركة في ميزان المراجعة لهذه الفترة."
+    "No trial balance activity for this period.": "لا توجد حركة في ميزان المراجعة لهذه الفترة.",
+    "Skipped Invalid Rows": "الصفوف غير الصالحة المتخطاة",
+    "Transactions Requiring Manual Correction": "معاملات تحتاج إلى تصحيح يدوي",
+    "These rows were not imported. Correct them manually and add them from the matching transaction page.": "لم يتم استيراد هذه الصفوف. صححها يدوياً ثم أضفها من صفحة المعاملة المناسبة.",
+    "Excel Row": "صف الإكسل",
+    "Field": "الحقل",
+    "Wrong Value": "القيمة الخاطئة",
+    "Reason": "السبب",
+    "Missing required value": "قيمة مطلوبة مفقودة",
+    "Invalid number": "رقم غير صالح",
+    "Missing required date": "تاريخ مطلوب مفقود",
+    "Invalid date": "تاريخ غير صالح",
+    "Weight": "الوزن",
+    "Rate": "السعر",
+    "Total": "الإجمالي",
+    "Amount": "المبلغ",
+    "Add Manually": "إضافة يدوية"
 }

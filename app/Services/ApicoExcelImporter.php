@@ -10,17 +10,24 @@ use App\Models\StockPurchase;
 use App\Models\StockSale;
 use App\Models\Supplier;
 use Carbon\Carbon;
-use Illuminate\Support\Collection;
 use ZipArchive;
 
 class ApicoExcelImporter
 {
+    private array $issues = [];
+
+    private bool $collectIssues = true;
+
     private array $sharedStrings = [];
+
     private array $sheets = [];
+
     private ZipArchive $zip;
 
     public function preview(string $path): array
     {
+        $this->issues = [];
+        $this->collectIssues = true;
         $this->open($path);
 
         try {
@@ -50,6 +57,10 @@ class ApicoExcelImporter
                     'payments' => round($customers->sum('imported.payments'), 3),
                     'stock_sales_amount' => round($customers->sum('imported.stock_sales_amount'), 3),
                 ],
+                'issues' => $this->issues,
+                'skipped_rows' => collect($this->issues)
+                    ->unique(fn (array $issue) => $issue['customer'].'|'.$issue['type'].'|'.$issue['row'])
+                    ->count(),
             ];
         } finally {
             $this->zip->close();
@@ -59,6 +70,7 @@ class ApicoExcelImporter
     public function import(string $path): array
     {
         $preview = $this->preview($path);
+        $this->collectIssues = false;
         $this->open($path);
 
         try {
@@ -99,6 +111,7 @@ class ApicoExcelImporter
             return $preview;
         } finally {
             $this->zip->close();
+            $this->collectIssues = true;
         }
     }
 
@@ -234,26 +247,38 @@ class ApicoExcelImporter
         foreach (range($startRow + 1, $endRow) as $rowNumber) {
             $row = $cells[$rowNumber] ?? [];
 
-            if (! $dateColumn || ! $weightColumn || ! $this->has($row, $dateColumn) || ! $this->has($row, $weightColumn)) {
+            if (! $dateColumn || ! $weightColumn
+                || (! $this->has($row, $dateColumn) && ! $this->has($row, $weightColumn))) {
                 continue;
             }
 
-            $weight = $this->number($row[$weightColumn] ?? null);
+            $context = $this->issueContext(
+                'Purchases sheet',
+                'Purchase',
+                $rowNumber,
+                $row,
+                array_filter([$dateColumn, $weightColumn, $rateColumn, $totalColumn, $supplierColumn])
+            );
+            $date = $this->validatedDate($row[$dateColumn] ?? null, $context, 'Date');
+            $weight = $this->validatedNumber($row[$weightColumn] ?? null, $context, 'Weight');
+            $rate = $this->validatedNumber($rateColumn ? ($row[$rateColumn] ?? null) : null, $context, 'Rate', false);
+            $total = $this->hasValue($totalColumn ? ($row[$totalColumn] ?? null) : null)
+                ? $this->validatedNumber($row[$totalColumn], $context, 'Total')
+                : ($weight !== null && $rate !== null ? round($weight * $rate, 3) : null);
 
-            if ($weight == 0.0) {
+            if ($date === null || $weight === null || $rate === null || $total === null || $weight == 0.0) {
                 continue;
             }
 
-            $rate = $this->number($rateColumn ? ($row[$rateColumn] ?? null) : null);
             $supplierName = trim((string) ($supplierColumn ? ($row[$supplierColumn] ?? '') : ''));
 
             $rows[] = [
-                'date' => $this->date($row[$dateColumn]),
+                'date' => $date,
                 'supplier_name' => $supplierName !== '' ? $supplierName : 'Excel Import',
                 'material_id' => null,
                 'weight_kg' => $weight,
                 'cost_per_kg' => $rate,
-                'total_cost' => $this->number($totalColumn ? ($row[$totalColumn] ?? $weight * $rate) : $weight * $rate),
+                'total_cost' => $total,
                 'notes' => 'Imported from purchases sheet',
             ];
         }
@@ -279,18 +304,29 @@ class ApicoExcelImporter
                 $row = $cells[$rowNumber] ?? [];
                 $columns = $this->columnsFrom($table['start_col'], $table['width']);
 
-                if ($isReceiveTable && $this->has($row, $columns[2])) {
+                if ($isReceiveTable
+                    && ($this->has($row, $columns[1]) || $this->has($row, $columns[2]))) {
+                    $context = $this->issueContext($sheet['name'], 'Recycle In', $rowNumber, $row, $columns);
+                    $date = $this->validatedDate($row[$columns[1]] ?? null, $context, 'Date');
+                    $weight = $this->validatedNumber($row[$columns[2]] ?? null, $context, 'Weight');
+
+                    if ($date === null || $weight === null) {
+                        continue;
+                    }
+
                     $recycleIns[] = [
-                        'date' => $this->dateOrDefault($row[$columns[1]] ?? null),
+                        'date' => $date,
                         'material_id' => null,
-                        'weight_kg' => $this->number($row[$columns[2]]),
+                        'weight_kg' => $weight,
                         'rate_per_kg' => 0,
                         'total_amount' => 0,
                         'notes' => $this->notes([$row[$columns[0]] ?? null, $row[$columns[3]] ?? null, $row[$columns[4]] ?? null]),
                     ];
                 }
 
-                if ($isPaymentTable && $this->has($row, $columns[1])) {
+                if ($isPaymentTable
+                    && ($this->has($row, $columns[0]) || $this->has($row, $columns[1]))) {
+                    $context = $this->issueContext($sheet['name'], 'Payment', $rowNumber, $row, $columns);
                     $paymentNoteColumn = $columns[3] ?? null;
                     $dateValue = $row[$columns[0]] ?? null;
                     $methodValue = $row[$columns[2]] ?? null;
@@ -307,35 +343,51 @@ class ApicoExcelImporter
                         $methodValue = 'Cheque';
                     }
 
+                    $date = $this->validatedDate($dateValue, $context, 'Date');
+                    $amount = $this->validatedNumber($row[$columns[1]] ?? null, $context, 'Amount');
+
+                    if ($date === null || $amount === null) {
+                        continue;
+                    }
+
                     $chequeDueDate ??= $this->chequeDueDate($dateValue, $methodValue, $noteValue);
                     $paymentType = $chequeDueDate ? 'cheque' : $this->paymentType($methodValue, $noteValue);
 
                     $payments[] = [
-                        'date' => $this->dateOrDefault($dateValue),
-                        'amount' => $this->number($row[$columns[1]]),
+                        'date' => $date,
+                        'amount' => $amount,
                         'payment_type' => $paymentType,
                         'payment_method' => $this->text($methodValue),
                         'reference_no' => null,
                         'bank_name' => null,
                         'cheque_due_date' => $paymentType === 'cheque' ? $chequeDueDate : null,
                         'cheque_status' => 'pending',
-                        'notes' => $this->notes([
-                            $this->hasValue($dateValue) ? null : 'Missing payment date in Excel',
-                            $noteValue,
-                        ]),
+                        'notes' => $this->notes([$noteValue]),
                     ];
                 }
 
-                if (($isRecycleOutTable || $isStockSaleTable) && $this->has($row, $columns[2])) {
-                    $weight = $this->number($row[$columns[2]]);
-                    $rate = $this->number($row[$columns[3]] ?? null);
-                    $amount = $this->number($row[$columns[4]] ?? ($weight * $rate));
+                if (($isRecycleOutTable || $isStockSaleTable)
+                    && ($this->has($row, $columns[1])
+                        || $this->has($row, $columns[2])
+                        || $this->has($row, $columns[3])
+                        || $this->has($row, $columns[4]))) {
+                    $type = $isRecycleOutTable ? 'Recycle Out' : 'Stock Sale';
+                    $context = $this->issueContext($sheet['name'], $type, $rowNumber, $row, $columns);
+                    $date = $this->validatedDate($row[$columns[1]] ?? null, $context, 'Date');
+                    $weight = $this->validatedNumber($row[$columns[2]] ?? null, $context, 'Weight');
+                    $rate = $this->validatedNumber($row[$columns[3]] ?? null, $context, 'Rate', false);
+                    $amount = $this->hasValue($row[$columns[4]] ?? null)
+                        ? $this->validatedNumber($row[$columns[4]], $context, 'Total')
+                        : ($weight !== null && $rate !== null ? round($weight * $rate, 3) : null);
                     $noteColumn = $columns[5] ?? null;
-                    $dateValue = $row[$columns[1]] ?? null;
+
+                    if ($date === null || $weight === null || $rate === null || $amount === null) {
+                        continue;
+                    }
 
                     if ($isRecycleOutTable) {
                         $recycleOuts[] = [
-                            'date' => $this->dateOrDefault($dateValue),
+                            'date' => $date,
                             'material_id' => null,
                             'weight_kg' => $weight,
                             'recycled_out_kg' => $rate > 0 ? $weight : 0,
@@ -344,7 +396,6 @@ class ApicoExcelImporter
                             'rate_per_kg' => $rate,
                             'total_amount' => $amount,
                             'notes' => $this->notes([
-                                $this->hasValue($dateValue) ? null : 'Missing recycle-out date in Excel',
                                 $row[$columns[0]] ?? null,
                                 $noteColumn ? ($row[$noteColumn] ?? null) : null,
                             ]),
@@ -353,7 +404,7 @@ class ApicoExcelImporter
 
                     if ($isStockSaleTable) {
                         $stockSales[] = [
-                            'date' => $this->dateOrDefault($dateValue),
+                            'date' => $date,
                             'material_id' => null,
                             'weight_kg' => $weight,
                             'selling_price_per_kg' => $rate,
@@ -362,7 +413,6 @@ class ApicoExcelImporter
                             'granulation_cost_per_kg' => 0,
                             'net_profit' => $amount,
                             'notes' => $this->notes([
-                                $this->hasValue($dateValue) ? null : 'Missing stock-sale date in Excel',
                                 $row[$columns[0]] ?? null,
                                 $noteColumn ? ($row[$noteColumn] ?? null) : null,
                             ]),
@@ -430,6 +480,7 @@ class ApicoExcelImporter
             ->values()
             ->map(function (array $table, int $index) {
                 $table['table_index'] = $index + 1;
+
                 return $table;
             })
             ->all();
@@ -465,7 +516,7 @@ class ApicoExcelImporter
 
     private function open(string $path): void
     {
-        $this->zip = new ZipArchive();
+        $this->zip = new ZipArchive;
         $this->zip->open($path);
         $this->sharedStrings = $this->loadSharedStrings();
         $this->sheets = $this->loadSheets();
@@ -602,6 +653,84 @@ class ApicoExcelImporter
         }
 
         return round((float) $value, 3);
+    }
+
+    private function validatedNumber(
+        mixed $value,
+        array $context,
+        string $field,
+        bool $required = true
+    ): ?float {
+        if (! $this->hasValue($value)) {
+            if ($required) {
+                $this->addIssue($context, $field, $value, 'Missing required value');
+
+                return null;
+            }
+
+            return 0.0;
+        }
+
+        if (! is_numeric($value)) {
+            $this->addIssue($context, $field, $value, 'Invalid number');
+
+            return null;
+        }
+
+        return round((float) $value, 3);
+    }
+
+    private function validatedDate(mixed $value, array $context, string $field): ?string
+    {
+        if (! $this->hasValue($value)) {
+            $this->addIssue($context, $field, $value, 'Missing required date');
+
+            return null;
+        }
+
+        try {
+            return $this->date($value);
+        } catch (\Throwable) {
+            $this->addIssue($context, $field, $value, 'Invalid date');
+
+            return null;
+        }
+    }
+
+    private function issueContext(
+        string $customer,
+        string $type,
+        int $row,
+        array $values,
+        array $columns
+    ): array {
+        $transaction = collect($columns)
+            ->filter()
+            ->map(fn (string $column) => $this->hasValue($values[$column] ?? null)
+                ? $column.': '.trim((string) $values[$column])
+                : null)
+            ->filter()
+            ->implode(' | ');
+
+        return [
+            'customer' => $customer,
+            'type' => $type,
+            'row' => $row,
+            'transaction' => $transaction,
+        ];
+    }
+
+    private function addIssue(array $context, string $field, mixed $value, string $reason): void
+    {
+        if (! $this->collectIssues) {
+            return;
+        }
+
+        $this->issues[] = $context + [
+            'field' => $field,
+            'value' => $this->hasValue($value) ? trim((string) $value) : '(blank)',
+            'reason' => $reason,
+        ];
     }
 
     private function date(mixed $value): string
