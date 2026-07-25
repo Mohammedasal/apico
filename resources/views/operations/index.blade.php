@@ -83,9 +83,18 @@
                 @endif
             </td>
             <td>
-                @if (auth()->user()?->canWriteOperationalData())
-                    <a href="{{ route('operations.edit', [$module, $record->id]) }}">{{ __('Edit') }}</a>
-                @endif
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                    @if (auth()->user()?->canWriteOperationalData())
+                        <a href="{{ route('operations.edit', [$module, $record->id]) }}">{{ __('Edit') }}</a>
+                    @endif
+                    @if (auth()->user()?->role === 'admin')
+                        <form method="post" action="{{ route('operations.destroy', [$module, $record->id]) }}" style="margin:0;padding:0;border:0;background:transparent;box-shadow:none" onsubmit="return confirm(@json(__('Delete this transaction? This action cannot be undone.')))">
+                            @csrf
+                            @method('delete')
+                            <button type="submit" style="background:var(--red);padding:6px 9px">{{ __('Delete') }}</button>
+                        </form>
+                    @endif
+                </div>
             </td>
         </tr>
     @endforeach

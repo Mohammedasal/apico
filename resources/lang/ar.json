@@ -620,5 +620,9 @@
     "Rate": "السعر",
     "Total": "الإجمالي",
     "Amount": "المبلغ",
-    "Add Manually": "إضافة يدوية"
+    "Add Manually": "إضافة يدوية",
+    "Delete": "حذف",
+    "Delete Transaction": "حذف المعاملة",
+    "Delete this transaction? This action cannot be undone.": "هل تريد حذف هذه المعاملة؟ لا يمكن التراجع عن هذا الإجراء.",
+    ":item deleted.": "تم حذف :item."
 }

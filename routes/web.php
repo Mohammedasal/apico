@@ -86,6 +86,7 @@ Route::middleware('auth')->group(function () {
             Route::post('/', [OperationController::class, 'store'])->middleware('role:admin,data_entry')->name('store');
             Route::get('/{id}/edit', [OperationController::class, 'edit'])->middleware('role:admin,data_entry')->name('edit');
             Route::put('/{id}', [OperationController::class, 'update'])->middleware('role:admin,data_entry')->name('update');
+            Route::delete('/{id}', [OperationController::class, 'destroy'])->middleware('role:admin')->name('destroy');
         });
 
     Route::middleware('role:admin,viewer')->group(function () {

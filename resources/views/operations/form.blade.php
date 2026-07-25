@@ -70,6 +70,13 @@
     </div>
     <p><button>{{ __('Save') }}</button></p>
 </form>
+@if ($isEdit && auth()->user()?->role === 'admin')
+    <form method="post" action="{{ route('operations.destroy', [$module, $record->id]) }}" style="margin-top:12px" onsubmit="return confirm(@json(__('Delete this transaction? This action cannot be undone.')))">
+        @csrf
+        @method('delete')
+        <button type="submit" style="background:var(--red)">{{ __('Delete Transaction') }}</button>
+    </form>
+@endif
 @if ($module === 'stock-sales')
 <script>
 document.addEventListener('DOMContentLoaded', function () {

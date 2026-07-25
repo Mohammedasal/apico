@@ -15,6 +15,7 @@ use App\Models\StockSale;
 use App\Models\Supplier;
 use App\Services\AccountingPostingService;
 use App\Services\ApicoCalculator;
+use App\Services\AuditService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -123,6 +124,28 @@ class OperationController extends Controller
         });
 
         return redirect()->route('operations.index', $module)->with('status', __(':item updated.', ['item' => __($this->module($module)['title'])]));
+    }
+
+    public function destroy(
+        string $module,
+        int $id,
+        Request $request,
+        AccountingPostingService $posting,
+        AuditService $audit
+    ) {
+        abort_unless($request->user()?->role === 'admin', 403);
+        $record = $this->module($module)['model']::findOrFail($id);
+
+        DB::transaction(function () use ($record, $request, $posting, $audit) {
+            $before = $record->toArray();
+            $posting->reverseOperational($record, $request->user());
+            $audit->record('operation_deleted', $record, $before, null);
+            $record->delete();
+        });
+
+        return redirect()
+            ->route('operations.index', $module)
+            ->with('status', __(':item deleted.', ['item' => __($this->module($module)['title'])]));
     }
 
     private function module(string $module): array

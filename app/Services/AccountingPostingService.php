@@ -69,11 +69,8 @@ class AccountingPostingService
 
     public function reverseOperational(Model $source, ?User $user = null): Collection
     {
-        if (! $this->automaticPostingEnabled()) {
-            return collect();
-        }
-
-        return DB::transaction(fn () => $this->activeSourceEntries($source, 'operations')
+        return DB::transaction(fn () => collect(['accounting', 'operations'])
+            ->flatMap(fn (string $sourceModule) => $this->activeSourceEntries($source, $sourceModule))
             ->map(fn (JournalEntry $entry) => $this->reverse($entry, $user)));
     }
 
