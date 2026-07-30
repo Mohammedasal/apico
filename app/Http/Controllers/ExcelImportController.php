@@ -12,16 +12,18 @@ use App\Models\Supplier;
 use App\Services\ApicoExcelImporter;
 use App\Services\ProductionExcelImporter;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
+use ZipArchive;
 
 class ExcelImportController extends Controller
 {
     public function store(Request $request, ApicoExcelImporter $importer)
     {
         $data = $request->validate([
-            'sales_sheet' => ['required', 'file', 'mimes:xlsx', 'max:20480'],
+            'sales_sheet' => $this->excelWorkbookRules(),
         ]);
 
         $path = $data['sales_sheet']->storeAs(
@@ -62,7 +64,7 @@ class ExcelImportController extends Controller
     public function production(Request $request, ProductionExcelImporter $importer)
     {
         $data = $request->validate([
-            'production_sheet' => ['required', 'file', 'mimes:xlsx', 'max:20480'],
+            'production_sheet' => $this->excelWorkbookRules(),
         ]);
 
         $path = $data['production_sheet']->storeAs(
@@ -94,6 +96,38 @@ class ExcelImportController extends Controller
         $directory = storage_path('app/backups');
         File::ensureDirectoryExists($directory);
         File::copy($database, $directory.'/apico-before-import-'.now()->format('Y-m-d-His').'.sqlite');
+    }
+
+    private function excelWorkbookRules(): array
+    {
+        return [
+            'required',
+            'file',
+            'max:20480',
+            function (string $attribute, mixed $value, \Closure $fail) {
+                if (! $value instanceof UploadedFile || ! $value->isValid()) {
+                    return;
+                }
+
+                if (strtolower($value->getClientOriginalExtension()) !== 'xlsx') {
+                    $fail(__('Upload a valid Excel .xlsx workbook.'));
+
+                    return;
+                }
+
+                $zip = new ZipArchive;
+                $opened = $zip->open($value->getRealPath());
+                $validWorkbook = $opened === true && $zip->locateName('xl/workbook.xml') !== false;
+
+                if ($opened === true) {
+                    $zip->close();
+                }
+
+                if (! $validWorkbook) {
+                    $fail(__('Upload a valid Excel .xlsx workbook.'));
+                }
+            },
+        ];
     }
 
     private function wipeImportedData(): void

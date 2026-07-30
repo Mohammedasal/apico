@@ -2,15 +2,53 @@
 
 namespace Tests\Feature;
 
+use App\Models\Customer;
 use App\Models\RecycleIn;
+use App\Models\User;
 use App\Services\ApicoExcelImporter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
 use ZipArchive;
 
 class ExcelImportToleranceTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_linux_zip_mime_xlsx_upload_is_accepted_when_workbook_structure_is_valid(): void
+    {
+        $path = storage_path('app/test-linux-mime-upload.xlsx');
+        $this->createWorkbook($path);
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $upload = new UploadedFile($path, 'sales-sheet.xlsx', 'application/zip', null, true);
+
+        $response = $this->actingAs($admin)->post(route('imports.sales-sheet.store'), [
+            'sales_sheet' => $upload,
+        ]);
+
+        $response->assertRedirect(route('dashboard'));
+        $response->assertSessionHasNoErrors();
+        $this->assertDatabaseCount('recycle_ins', 1);
+    }
+
+    public function test_renamed_non_workbook_file_is_rejected_without_flushing_data(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        RecycleIn::create([
+            'date' => '2026-07-01',
+            'customer_id' => Customer::create(['name' => 'Existing', 'status' => 'active'])->id,
+            'weight_kg' => 10,
+            'rate_per_kg' => 0,
+            'total_amount' => 0,
+        ]);
+
+        $response = $this->actingAs($admin)->post(route('imports.sales-sheet.store'), [
+            'sales_sheet' => UploadedFile::fake()->createWithContent('not-excel.xlsx', 'not an Excel workbook'),
+        ]);
+
+        $response->assertSessionHasErrors('sales_sheet');
+        $this->assertDatabaseCount('recycle_ins', 1);
+    }
 
     public function test_invalid_row_is_reported_while_valid_rows_continue_importing(): void
     {
