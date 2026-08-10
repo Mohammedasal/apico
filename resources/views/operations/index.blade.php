@@ -7,8 +7,10 @@
         <a class="button" href="{{ route('operations.create', $module) }}">{{ __('New :item', ['item' => __($config['title'])]) }}</a>
     @endif
 </div>
-@if (in_array($module, ['recycle-in', 'recycle-out'], true))
-    <form class="filters" method="get" style="margin-bottom:14px">
+<form class="filters" method="get" style="margin-bottom:14px">
+    <input type="hidden" name="sort" value="{{ $filters['sort'] }}">
+    <input type="hidden" name="direction" value="{{ $filters['direction'] }}">
+    @if ($customers->isNotEmpty())
         <div>
             <label>{{ __('Customer') }}</label>
             <select name="customer_id" class="searchable-select" data-placeholder="{{ __('All customers') }}">
@@ -18,26 +20,96 @@
                 @endforeach
             </select>
         </div>
-        <div><label>{{ __('From') }}</label><input type="date" name="from" value="{{ $filters['from'] ?? '' }}"></div>
-        <div><label>{{ __('To') }}</label><input type="date" name="to" value="{{ $filters['to'] ?? '' }}"></div>
+    @endif
+    @if ($suppliers->isNotEmpty())
+        <div>
+            <label>{{ __('Supplier') }}</label>
+            <select name="supplier_id" class="searchable-select" data-placeholder="{{ __('All suppliers') }}">
+                <option value="">{{ __('All suppliers') }}</option>
+                @foreach ($suppliers as $supplier)
+                    <option value="{{ $supplier->id }}" @selected(($filters['supplier_id'] ?? null) === $supplier->id)>{{ $supplier->name }}</option>
+                @endforeach
+            </select>
+        </div>
+    @endif
+    @if ($materials->isNotEmpty())
+        <div>
+            <label>{{ __('Material') }}</label>
+            <select name="material_id" class="searchable-select" data-placeholder="{{ __('All materials') }}">
+                <option value="">{{ __('All materials') }}</option>
+                @foreach ($materials as $material)
+                    <option value="{{ $material->id }}" @selected(($filters['material_id'] ?? null) === $material->id)>{{ $material->name }}</option>
+                @endforeach
+            </select>
+        </div>
+    @endif
+    <div><label>{{ __('From') }}</label><input type="date" name="from" value="{{ $filters['from'] ?? '' }}"></div>
+    <div><label>{{ __('To') }}</label><input type="date" name="to" value="{{ $filters['to'] ?? '' }}"></div>
+    @if ($module !== 'payments')
         <div><label>{{ __('Min Weight Kg') }}</label><input type="number" step="0.001" name="min_weight" value="{{ $filters['min_weight'] ?? '' }}"></div>
         <div><label>{{ __('Max Weight Kg') }}</label><input type="number" step="0.001" name="max_weight" value="{{ $filters['max_weight'] ?? '' }}"></div>
-        <div><button>{{ __('Search') }}</button></div>
-        <div><a class="button" href="{{ route('operations.index', $module) }}">{{ __('Clear') }}</a></div>
-    </form>
-@endif
+    @endif
+    @if ($module !== 'recycle-in')
+        <div><label>{{ __('Min Amount JOD') }}</label><input type="number" step="0.001" name="min_amount" value="{{ $filters['min_amount'] ?? '' }}"></div>
+        <div><label>{{ __('Max Amount JOD') }}</label><input type="number" step="0.001" name="max_amount" value="{{ $filters['max_amount'] ?? '' }}"></div>
+    @endif
+    @if ($module === 'payments')
+        <div>
+            <label>{{ __('Payment Type') }}</label>
+            <select name="payment_type">
+                <option value="">{{ __('All payment types') }}</option>
+                @foreach (['cash' => 'Cash', 'cheque' => 'Cheque', 'bank_transfer' => 'Bank Transfer', 'exchange_of_goods' => 'Exchange of Goods'] as $value => $label)
+                    <option value="{{ $value }}" @selected(($filters['payment_type'] ?? null) === $value)>{{ __($label) }}</option>
+                @endforeach
+            </select>
+        </div>
+        <div>
+            <label>{{ __('Cheque Status') }}</label>
+            <select name="cheque_status">
+                <option value="">{{ __('All cheque statuses') }}</option>
+                @foreach (['pending' => 'Pending', 'collected' => 'Collected', 'bounced' => 'Bounced', 'cancelled' => 'Cancelled'] as $value => $label)
+                    <option value="{{ $value }}" @selected(($filters['cheque_status'] ?? null) === $value)>{{ __($label) }}</option>
+                @endforeach
+            </select>
+        </div>
+    @endif
+    <div>
+        <label>{{ __('Search') }}</label>
+        <input type="search" name="search" value="{{ $filters['search'] ?? '' }}" placeholder="{{ $module === 'payments' ? __('Notes, reference, bank') : __('Search notes') }}">
+    </div>
+    <div><button>{{ __('Search') }}</button></div>
+    <div><a class="button" href="{{ route('operations.index', $module) }}">{{ __('Clear') }}</a></div>
+</form>
+@php
+    $sortUrl = function (string $column) use ($module, $filters) {
+        $query = request()->except('page');
+        $query['sort'] = $column;
+        $query['direction'] = $filters['sort'] === $column && $filters['direction'] === 'asc' ? 'desc' : 'asc';
+
+        return route('operations.index', array_merge(['module' => $module], $query));
+    };
+    $sortIndicator = fn (string $column) => $filters['sort'] === $column
+        ? ($filters['direction'] === 'asc' ? '&uarr;' : '&darr;')
+        : '';
+@endphp
 <div class="table-wrap">
 <table>
     <thead>
     <tr>
-        <th>{{ __('Date') }}</th>
-        @if ($module !== 'stock-purchases')<th>{{ __('Customer') }}</th>@endif
-        @if ($module === 'stock-purchases')<th>{{ __('Supplier') }}</th>@endif
-        @if ($module !== 'payments')<th>{{ __('Material') }}</th><th>{{ __('Weight Kg') }}</th>@endif
-        <th>{{ $module === 'recycle-out' ? __('Calculation / Amount JOD') : __('Amount') }}</th>
-        @if ($module === 'payments')<th>{{ __('Type') }}</th><th>{{ __('Cheque') }}</th>@endif
-        <th>{{ __('Notes') }}</th>
-        <th>{{ __('Audit') }}</th>
+        <th><a class="sort-link" href="{{ $sortUrl('date') }}">{{ __('Date') }} <span>{!! $sortIndicator('date') !!}</span></a></th>
+        @if ($module !== 'stock-purchases')<th><a class="sort-link" href="{{ $sortUrl('customer') }}">{{ __('Customer') }} <span>{!! $sortIndicator('customer') !!}</span></a></th>@endif
+        @if ($module === 'stock-purchases')<th><a class="sort-link" href="{{ $sortUrl('supplier') }}">{{ __('Supplier') }} <span>{!! $sortIndicator('supplier') !!}</span></a></th>@endif
+        @if ($module !== 'payments')
+            <th><a class="sort-link" href="{{ $sortUrl('material') }}">{{ __('Material') }} <span>{!! $sortIndicator('material') !!}</span></a></th>
+            <th><a class="sort-link" href="{{ $sortUrl('weight') }}">{{ __('Weight Kg') }} <span>{!! $sortIndicator('weight') !!}</span></a></th>
+        @endif
+        <th><a class="sort-link" href="{{ $sortUrl('amount') }}">{{ $module === 'recycle-out' ? __('Calculation / Amount JOD') : __('Amount') }} <span>{!! $sortIndicator('amount') !!}</span></a></th>
+        @if ($module === 'payments')
+            <th><a class="sort-link" href="{{ $sortUrl('type') }}">{{ __('Type') }} <span>{!! $sortIndicator('type') !!}</span></a></th>
+            <th><a class="sort-link" href="{{ $sortUrl('cheque') }}">{{ __('Cheque') }} <span>{!! $sortIndicator('cheque') !!}</span></a></th>
+        @endif
+        <th><a class="sort-link" href="{{ $sortUrl('notes') }}">{{ __('Notes') }} <span>{!! $sortIndicator('notes') !!}</span></a></th>
+        <th><a class="sort-link" href="{{ $sortUrl('audit') }}">{{ __('Audit') }} <span>{!! $sortIndicator('audit') !!}</span></a></th>
         <th></th>
     </tr>
     </thead>

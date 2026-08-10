@@ -89,6 +89,9 @@
         .table-sort { display:inline-flex; align-items:center; gap:5px; width:100%; padding:0; border:0; background:transparent; color:inherit; font:inherit; text-align:inherit; cursor:pointer; }
         .table-sort:hover { background:transparent; color:var(--accent-strong); }
         .table-sort span { color:var(--muted); font-size:11px; }
+        .sort-link { color:inherit; text-decoration:none; display:inline-flex; align-items:center; gap:5px; }
+        .sort-link:hover { color:var(--accent-strong); text-decoration:underline; }
+        .sort-link span { display:inline-block; min-width:10px; color:var(--accent); }
         tr:hover td { background:#fbfdfc; }
         .statement-table { table-layout:fixed; }
         .statement-table .description-cell, .statement-table .notes-cell { font-size:12px; line-height:1.35; overflow-wrap:anywhere; word-break:break-word; white-space:normal; }

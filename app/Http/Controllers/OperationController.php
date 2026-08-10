@@ -16,6 +16,7 @@ use App\Models\Supplier;
 use App\Services\AccountingPostingService;
 use App\Services\ApicoCalculator;
 use App\Services\AuditService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -38,10 +39,9 @@ class OperationController extends Controller
             ->with($this->relations($module));
 
         $this->applyFilters($module, $query, $filters);
+        $this->applySorting($module, $query, $filters);
 
         $records = $query
-            ->latest('date')
-            ->latest('id')
             ->paginate(25)
             ->withQueryString();
 
@@ -50,8 +50,14 @@ class OperationController extends Controller
             'config' => $config,
             'records' => $records,
             'filters' => $filters,
-            'customers' => in_array($module, ['recycle-in', 'recycle-out'], true)
+            'customers' => in_array($module, ['recycle-in', 'recycle-out', 'payments', 'stock-sales'], true)
                 ? Customer::orderBy('name')->get()
+                : collect(),
+            'suppliers' => $module === 'stock-purchases'
+                ? Supplier::orderBy('name')->get()
+                : collect(),
+            'materials' => $module !== 'payments'
+                ? Material::orderBy('name')->get()
                 : collect(),
         ]);
     }
@@ -166,31 +172,131 @@ class OperationController extends Controller
 
     private function filters(string $module, Request $request): array
     {
-        if (! in_array($module, ['recycle-in', 'recycle-out'], true)) {
-            return [];
-        }
+        $sortable = array_keys($this->sortableColumns($module));
+        $sort = $request->input('sort', 'date');
 
         return [
             'customer_id' => $request->integer('customer_id') ?: null,
+            'supplier_id' => $request->integer('supplier_id') ?: null,
+            'material_id' => $request->integer('material_id') ?: null,
             'from' => $request->input('from'),
             'to' => $request->input('to'),
             'min_weight' => $request->filled('min_weight') ? (float) $request->input('min_weight') : null,
             'max_weight' => $request->filled('max_weight') ? (float) $request->input('max_weight') : null,
+            'min_amount' => $request->filled('min_amount') ? (float) $request->input('min_amount') : null,
+            'max_amount' => $request->filled('max_amount') ? (float) $request->input('max_amount') : null,
+            'payment_type' => in_array($request->input('payment_type'), ['cash', 'cheque', 'bank_transfer', 'exchange_of_goods'], true)
+                ? $request->input('payment_type')
+                : null,
+            'cheque_status' => in_array($request->input('cheque_status'), ['pending', 'collected', 'bounced', 'cancelled'], true)
+                ? $request->input('cheque_status')
+                : null,
+            'search' => trim((string) $request->input('search')) ?: null,
+            'sort' => in_array($sort, $sortable, true) ? $sort : 'date',
+            'direction' => $request->input('direction') === 'asc' ? 'asc' : 'desc',
         ];
     }
 
-    private function applyFilters(string $module, $query, array $filters): void
+    private function applyFilters(string $module, Builder $query, array $filters): void
     {
-        if (! in_array($module, ['recycle-in', 'recycle-out'], true)) {
-            return;
-        }
+        $amountColumn = $this->amountColumn($module);
 
         $query
-            ->when($filters['customer_id'] ?? null, fn ($query, $customerId) => $query->where('customer_id', $customerId))
+            ->when(
+                in_array($module, ['recycle-in', 'recycle-out', 'payments', 'stock-sales'], true) ? ($filters['customer_id'] ?? null) : null,
+                fn (Builder $query, $customerId) => $query->where('customer_id', $customerId)
+            )
+            ->when($module === 'stock-purchases' ? ($filters['supplier_id'] ?? null) : null, fn (Builder $query, $supplierId) => $query->where('supplier_id', $supplierId))
+            ->when($module !== 'payments' ? ($filters['material_id'] ?? null) : null, fn (Builder $query, $materialId) => $query->where('material_id', $materialId))
             ->when($filters['from'] ?? null, fn ($query, $from) => $query->whereDate('date', '>=', $from))
             ->when($filters['to'] ?? null, fn ($query, $to) => $query->whereDate('date', '<=', $to))
-            ->when(! is_null($filters['min_weight'] ?? null), fn ($query) => $query->where('weight_kg', '>=', $filters['min_weight']))
-            ->when(! is_null($filters['max_weight'] ?? null), fn ($query) => $query->where('weight_kg', '<=', $filters['max_weight']));
+            ->when($module !== 'payments' && ! is_null($filters['min_weight'] ?? null), fn (Builder $query) => $query->where('weight_kg', '>=', $filters['min_weight']))
+            ->when($module !== 'payments' && ! is_null($filters['max_weight'] ?? null), fn (Builder $query) => $query->where('weight_kg', '<=', $filters['max_weight']))
+            ->when($amountColumn && ! is_null($filters['min_amount'] ?? null), fn (Builder $query) => $query->where($amountColumn, '>=', $filters['min_amount']))
+            ->when($amountColumn && ! is_null($filters['max_amount'] ?? null), fn (Builder $query) => $query->where($amountColumn, '<=', $filters['max_amount']))
+            ->when($module === 'payments' ? ($filters['payment_type'] ?? null) : null, fn (Builder $query, $type) => $query->where('payment_type', $type))
+            ->when($module === 'payments' ? ($filters['cheque_status'] ?? null) : null, fn (Builder $query, $status) => $query->where('payment_type', 'cheque')->where('cheque_status', $status))
+            ->when($filters['search'] ?? null, function (Builder $query, string $search) use ($module) {
+                $query->where(function (Builder $query) use ($module, $search) {
+                    $query->where('notes', 'like', "%{$search}%");
+
+                    if ($module === 'payments') {
+                        $query->orWhere('reference_no', 'like', "%{$search}%")
+                            ->orWhere('payment_method', 'like', "%{$search}%")
+                            ->orWhere('bank_name', 'like', "%{$search}%");
+                    }
+
+                    if ($module === 'stock-purchases') {
+                        $query->orWhere('supplier_name', 'like', "%{$search}%");
+                    }
+                });
+            });
+    }
+
+    private function applySorting(string $module, Builder $query, array $filters): void
+    {
+        $sort = $filters['sort'];
+        $direction = $filters['direction'];
+        $column = $this->sortableColumns($module)[$sort];
+        $table = $query->getModel()->getTable();
+
+        if ($column === 'customer') {
+            $query->orderBy(
+                Customer::select('name')->whereColumn('customers.id', "{$table}.customer_id"),
+                $direction
+            );
+        } elseif ($column === 'supplier') {
+            $query->orderBy(
+                Supplier::select('name')->whereColumn('suppliers.id', "{$table}.supplier_id"),
+                $direction
+            );
+        } elseif ($column === 'material') {
+            $query->orderBy(
+                Material::select('name')->whereColumn('materials.id', "{$table}.material_id"),
+                $direction
+            );
+        } else {
+            $query->orderBy($column, $direction);
+        }
+
+        $query->orderBy('id', $direction);
+    }
+
+    private function sortableColumns(string $module): array
+    {
+        $columns = [
+            'date' => 'date',
+            'amount' => $this->amountColumn($module),
+            'notes' => 'notes',
+            'audit' => 'created_at',
+        ];
+
+        if ($module === 'stock-purchases') {
+            $columns['supplier'] = 'supplier';
+        } else {
+            $columns['customer'] = 'customer';
+        }
+
+        if ($module !== 'payments') {
+            $columns['material'] = 'material';
+            $columns['weight'] = 'weight_kg';
+        } else {
+            $columns['type'] = 'payment_type';
+            $columns['cheque'] = 'cheque_due_date';
+        }
+
+        return array_filter($columns);
+    }
+
+    private function amountColumn(string $module): ?string
+    {
+        return match ($module) {
+            'recycle-in', 'recycle-out' => 'total_amount',
+            'payments' => 'amount',
+            'stock-purchases' => 'total_cost',
+            'stock-sales' => 'sales_value',
+            default => null,
+        };
     }
 
     private function validated(string $module, Request $request, ApicoCalculator $calculator, ?int $ignoreId = null): array

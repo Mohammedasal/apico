@@ -625,5 +625,13 @@
     "Delete Transaction": "حذف المعاملة",
     "Delete this transaction? This action cannot be undone.": "هل تريد حذف هذه المعاملة؟ لا يمكن التراجع عن هذا الإجراء.",
     ":item deleted.": "تم حذف :item.",
-    "Upload a valid Excel .xlsx workbook.": "ارفع ملف Excel صالحاً بصيغة .xlsx."
+    "Upload a valid Excel .xlsx workbook.": "ارفع ملف Excel صالحاً بصيغة .xlsx.",
+    "All suppliers": "كل الموردين",
+    "All materials": "كل المواد",
+    "Min Amount JOD": "أقل مبلغ بالدينار",
+    "Max Amount JOD": "أعلى مبلغ بالدينار",
+    "All payment types": "كل طرق الدفع",
+    "All cheque statuses": "كل حالات الشيكات",
+    "Notes, reference, bank": "الملاحظات أو المرجع أو البنك",
+    "Search notes": "البحث في الملاحظات"
 }
