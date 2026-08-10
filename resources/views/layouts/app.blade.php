@@ -1,9 +1,40 @@
 <!doctype html>
 <html lang="{{ app()->getLocale() }}" dir="{{ app()->getLocale() === 'ar' ? 'rtl' : 'ltr' }}">
 <head>
+    @php
+        $pageTitle = ($config['title'] ?? null) ?: match (true) {
+            request()->routeIs('dashboard') => 'Dashboard',
+            request()->routeIs('production.*') => 'Production / P&L',
+            request()->routeIs('cheques-in.*') => 'Cheques In',
+            request()->routeIs('cheques-out.*') => 'Cheques Out',
+            request()->routeIs('customers.show') => 'Customer Statement',
+            request()->routeIs('customers.*') => 'Customers',
+            request()->routeIs('materials.*') => 'Materials',
+            request()->routeIs('suppliers.show') => 'Supplier Statement',
+            request()->routeIs('suppliers.*') => 'Suppliers',
+            request()->routeIs('supplier-payments.*') => 'Supplier Payments',
+            request()->routeIs('reports.alerts*') => 'Alerts',
+            request()->routeIs('reports.monthly*') => 'Monthly Report',
+            request()->routeIs('reports.stock-profit*') => 'Stock Profit',
+            request()->routeIs('settings.*') => 'Settings',
+            request()->routeIs('users.*') => 'Users',
+            request()->routeIs('accounting.reports.trial-balance*') => 'Trial Balance',
+            request()->routeIs('accounting.expenses.*') => 'Expense Vouchers',
+            request()->routeIs('accounting.expense-categories.*') => 'Expense Categories',
+            request()->routeIs('accounting.employees.*') => 'Employees',
+            request()->routeIs('accounting.salary-advances.*') => 'Salary Advances',
+            request()->routeIs('accounting.payroll.*') => 'Payroll',
+            request()->routeIs('accounting.journals.*') => 'Journal Entries',
+            request()->routeIs('accounting.accounts.*') => 'Chart of Accounts',
+            request()->routeIs('accounting.mappings.*') => 'Account Mappings',
+            request()->routeIs('accounting.periods.*') => 'Accounting Periods',
+            request()->routeIs('accounting.dashboard') => 'Accounting Dashboard',
+            default => null,
+        };
+    @endphp
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ __($title ?? 'APICO Factory') }}</title>
+    <title>APICO{{ $pageTitle ? ' | '.__($pageTitle) : '' }}</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root { --ink:#18201d; --muted:#66706b; --line:#dde5e1; --panel:#ffffff; --bg:#f4f6f5; --soft:#eef3f1; --accent:#176b55; --accent-strong:#0f513f; --blue:#2563eb; --amber:#b45309; --red:#b91c1c; --green:#166534; }
