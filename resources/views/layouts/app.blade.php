@@ -16,6 +16,8 @@
             request()->routeIs('reports.alerts*') => 'Alerts',
             request()->routeIs('reports.monthly*') => 'Monthly Report',
             request()->routeIs('reports.stock-profit*') => 'Stock Profit',
+            request()->routeIs('dashboards.stock-sales') => 'Stock Sales Dashboard',
+            request()->routeIs('dashboards.recycle-out') => 'Recycle Out Dashboard',
             request()->routeIs('settings.*') => 'Settings',
             request()->routeIs('users.*') => 'Users',
             request()->routeIs('accounting.reports.trial-balance*') => 'Trial Balance',
@@ -120,6 +122,17 @@
         form.filters, .form-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:10px; align-items:end; }
         .filters { padding:10px; background:#fff; border:1px solid var(--line); border-radius:8px; }
         .toolbar .filters { grid-template-columns:repeat(3, minmax(118px, 1fr)); min-width:390px; }
+        .period-toolbar { display:flex; align-items:end; justify-content:space-between; gap:12px; margin-bottom:16px; flex-wrap:wrap; }
+        .segmented { display:inline-flex; border:1px solid var(--line); border-radius:7px; overflow:hidden; background:#fff; }
+        .segmented a { color:var(--ink); text-decoration:none; padding:9px 13px; border-inline-end:1px solid var(--line); font-weight:600; }
+        .segmented a:last-child { border-inline-end:0; }
+        .segmented a:hover { background:var(--soft); }
+        .segmented a.active { background:var(--accent); color:#fff; }
+        .compact-filter { display:flex !important; align-items:end; padding:0; border:0; background:transparent; }
+        .compact-filter > div:first-of-type { min-width:180px; }
+        .dashboard-kpis { grid-template-columns:repeat(auto-fit, minmax(155px, 1fr)); }
+        .dashboard-columns { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:16px; }
+        .chart-panel { height:340px; }
         button { background:var(--accent); color:#fff; border:0; border-radius:6px; padding:10px 14px; cursor:pointer; font-weight:bold; }
         button:hover { background:var(--accent-strong); }
         .error { color:#b91c1c; font-size:13px; margin-top:4px; }
@@ -158,6 +171,12 @@
             .topbar { position:static; padding:12px 16px; }
             main { padding:16px; }
             .toolbar .filters { min-width:0; width:100%; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); }
+            .period-toolbar { align-items:stretch; }
+            .segmented { display:grid; grid-template-columns:repeat(2, 1fr); width:100%; }
+            .segmented a { text-align:center; padding:9px 7px; }
+            .compact-filter { width:100%; display:grid !important; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); }
+            .compact-filter > div { min-width:0 !important; }
+            .dashboard-columns { grid-template-columns:1fr; }
         }
     </style>
 </head>
@@ -192,6 +211,8 @@
         <a @class(['active' => request()->routeIs('supplier-payments.*')]) href="{{ route('supplier-payments.index') }}">{{ __('Supplier Payments') }}</a>
         @if ($currentUser?->canViewFinancialReports())
             <div class="nav-section">{{ __('Review') }}</div>
+            <a @class(['active' => request()->routeIs('dashboards.recycle-out')]) href="{{ route('dashboards.recycle-out') }}">{{ __('Recycle Out Dashboard') }}</a>
+            <a @class(['active' => request()->routeIs('dashboards.stock-sales')]) href="{{ route('dashboards.stock-sales') }}">{{ __('Stock Sales Dashboard') }}</a>
             <a @class(['active' => request()->routeIs('reports.*')]) href="{{ $currentUser->canViewProfitAndLoss() ? route('reports.monthly') : route('reports.alerts') }}">{{ __('Reports') }}</a>
         @endif
         @if ($currentUser?->canManageAccounting())

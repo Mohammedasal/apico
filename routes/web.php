@@ -17,6 +17,7 @@ use App\Http\Controllers\ExpenseVoucherController;
 use App\Http\Controllers\JournalEntryController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\MaterialController;
+use App\Http\Controllers\OperationalDashboardController;
 use App\Http\Controllers\OperationController;
 use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\ProductionController;
@@ -93,6 +94,11 @@ Route::middleware('auth')->group(function () {
         Route::get('/reports/customer-statement/{customer}', [ReportController::class, 'customerStatement'])->name('reports.customer-statement');
         Route::get('/reports/alerts', [ReportController::class, 'alerts'])->name('reports.alerts');
         Route::get('/reports/alerts/export', [ReportController::class, 'alertsExport'])->name('reports.alerts.export');
+    });
+
+    Route::middleware('role:admin,accountant,viewer')->group(function () {
+        Route::get('/dashboards/stock-sales', [OperationalDashboardController::class, 'stockSales'])->name('dashboards.stock-sales');
+        Route::get('/dashboards/recycle-out', [OperationalDashboardController::class, 'recycleOut'])->name('dashboards.recycle-out');
     });
 
     Route::middleware('role:admin')->group(function () {
