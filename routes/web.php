@@ -67,14 +67,14 @@ Route::middleware('auth')->group(function () {
     Route::get('/cheques-in', [ChequeInController::class, 'index'])->middleware('role:admin,data_entry,accountant')->name('cheques-in.index');
     Route::put('/cheques-in/{payment}', [ChequeInController::class, 'update'])->middleware('role:admin,data_entry,accountant')->name('cheques-in.update');
 
+    Route::resource('customers', CustomerController::class)->only(['create', 'store', 'edit', 'update'])->middleware('role:admin,data_entry');
     Route::get('/customers/{customer}/export', [CustomerController::class, 'export'])->middleware('role:admin,viewer')->name('customers.export');
     Route::resource('customers', CustomerController::class)->only(['index', 'show']);
-    Route::resource('customers', CustomerController::class)->only(['create', 'store', 'edit', 'update'])->middleware('role:admin,data_entry');
     Route::resource('materials', MaterialController::class)->only(['index']);
     Route::resource('materials', MaterialController::class)->only(['create', 'store', 'edit', 'update'])->middleware('role:admin,data_entry');
+    Route::resource('suppliers', SupplierController::class)->only(['create', 'store', 'edit', 'update'])->middleware('role:admin,data_entry');
     Route::get('/suppliers/{supplier}/export', [SupplierController::class, 'export'])->middleware('role:admin,viewer')->name('suppliers.export');
     Route::resource('suppliers', SupplierController::class)->only(['index', 'show']);
-    Route::resource('suppliers', SupplierController::class)->only(['create', 'store', 'edit', 'update'])->middleware('role:admin,data_entry');
     Route::resource('supplier-payments', SupplierPaymentController::class)->only(['index']);
     Route::resource('supplier-payments', SupplierPaymentController::class)->only(['create', 'store', 'edit', 'update'])->middleware('role:admin,data_entry');
 
