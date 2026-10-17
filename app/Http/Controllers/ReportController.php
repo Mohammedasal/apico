@@ -61,17 +61,17 @@ class ReportController extends Controller
                 $to = date('Y-m-t', strtotime($from));
 
                 $dateRange = fn ($query) => $query->whereDate('date', '>=', $from)->whereDate('date', '<=', $to);
-                $recycleOutKg = RecycleOut::query()->tap($dateRange)->sum('weight_kg');
-                $wasteKg = RecycleOut::query()->tap($dateRange)->sum('waste_kg');
+                $recycleOutKg = RecycleOut::query()->where('transaction_type', 'output')->tap($dateRange)->sum('weight_kg');
+                $wasteKg = RecycleOut::query()->where('transaction_type', 'output')->tap($dateRange)->sum('waste_kg');
 
                 return [
                     'month' => date('M Y', strtotime($from)),
                     'recycle_in_kg' => RecycleIn::query()->tap($dateRange)->sum('weight_kg'),
                     'recycle_out_kg' => $recycleOutKg,
-                    'recycled_out_kg' => RecycleOut::query()->tap($dateRange)->sum('recycled_out_kg'),
+                    'recycled_out_kg' => RecycleOut::query()->where('transaction_type', 'output')->tap($dateRange)->sum('recycled_out_kg'),
                     'waste_kg' => $wasteKg,
                     'waste_percentage' => $recycleOutKg > 0 ? round(((float) $wasteKg / (float) $recycleOutKg) * 100, 2) : 0,
-                    'non_recycled_kg' => RecycleOut::query()->tap($dateRange)->sum('non_recycled_kg'),
+                    'non_recycled_kg' => RecycleOut::query()->where('transaction_type', 'output')->tap($dateRange)->sum('non_recycled_kg'),
                     'payments' => Payment::query()->tap($dateRange)->sum('amount'),
                     'stock_sales' => StockSale::query()->tap($dateRange)->sum('sales_value'),
                     'stock_profit' => $calculator->stockProfitSummary($from, $to)['profit'],

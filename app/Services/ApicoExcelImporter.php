@@ -386,15 +386,24 @@ class ApicoExcelImporter
                     }
 
                     if ($isRecycleOutTable) {
+                        $calculatedAmount = round(($rate > 0 ? $weight : 0) * $rate, 3);
+                        $variance = round($amount - $calculatedAmount, 3);
+                        $isAdjustment = $weight < 0 || $rate < 0 || $amount < 0;
                         $recycleOuts[] = [
                             'date' => $date,
                             'material_id' => null,
+                            'transaction_type' => $isAdjustment ? 'correction' : 'output',
                             'weight_kg' => $weight,
                             'recycled_out_kg' => $rate > 0 ? $weight : 0,
                             'waste_kg' => $rate > 0 ? 0 : $weight,
                             'non_recycled_kg' => 0,
                             'rate_per_kg' => $rate,
                             'total_amount' => $amount,
+                            'calculated_amount' => $calculatedAmount,
+                            'amount_variance' => $variance,
+                            'override_reason' => abs($variance) >= 0.0005
+                                ? 'Imported total differs from weight x rate.'
+                                : null,
                             'notes' => $this->notes([
                                 $row[$columns[0]] ?? null,
                                 $noteColumn ? ($row[$noteColumn] ?? null) : null,

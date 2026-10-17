@@ -44,10 +44,14 @@
             @endif
         @endif
         @if ($module === 'recycle-out')
+            <div><label>{{ __('Transaction Type') }}</label><select name="transaction_type"><option value="output" @selected(old('transaction_type', $record?->transaction_type ?? 'output') === 'output')>{{ __('Output') }}</option><option value="return" @selected(old('transaction_type', $record?->transaction_type) === 'return')>{{ __('Return') }}</option><option value="correction" @selected(old('transaction_type', $record?->transaction_type) === 'correction')>{{ __('Correction') }}</option></select>@error('transaction_type')<div class="error">{{ $message }}</div>@enderror</div>
             <div><label>{{ __('Recycled Out Kg') }}</label><input type="number" step="0.001" name="recycled_out_kg" value="{{ old('recycled_out_kg', $record?->recycled_out_kg ?? 0) }}">@error('recycled_out_kg')<div class="error">{{ $message }}</div>@enderror</div>
             <div><label>{{ __('Waste Kg') }}</label><input type="number" step="0.001" name="waste_kg" value="{{ old('waste_kg', $record?->waste_kg ?? 0) }}">@error('waste_kg')<div class="error">{{ $message }}</div>@enderror</div>
             <div><label>{{ __('Non-Recycled Kg') }}</label><input type="number" step="0.001" name="non_recycled_kg" value="{{ old('non_recycled_kg', $record?->non_recycled_kg ?? 0) }}">@error('non_recycled_kg')<div class="error">{{ $message }}</div>@enderror</div>
             <div><label>{{ __('Rate/Kg') }}</label><input type="text" inputmode="decimal" name="rate_per_kg" value="{{ old('rate_per_kg', $record?->rate_per_kg) }}">@error('rate_per_kg')<div class="error">{{ $message }}</div>@enderror</div>
+            @if ($isEdit && abs((float) $record?->amount_variance) >= 0.0005)
+                <div class="card"><div class="muted">{{ __('Imported Amount Variance') }}</div><strong>{{ number_format((float) $record->amount_variance, 3) }} JOD</strong><div>{{ $record->override_reason }}</div></div>
+            @endif
         @elseif ($module === 'payments')
             <div><label>{{ __('Amount') }}</label><input type="number" step="0.001" name="amount" value="{{ old('amount', $record?->amount) }}">@error('amount')<div class="error">{{ $message }}</div>@enderror</div>
             <div><label>{{ __('Type') }}</label><select name="payment_type"><option value="cash" @selected(old('payment_type', $record?->payment_type ?? 'cash') === 'cash')>{{ __('Cash') }}</option><option value="cheque" @selected(old('payment_type', $record?->payment_type) === 'cheque')>{{ __('Cheque') }}</option><option value="bank_transfer" @selected(old('payment_type', $record?->payment_type) === 'bank_transfer')>{{ __('Bank Transfer') }}</option><option value="exchange_of_goods" @selected(old('payment_type', $record?->payment_type) === 'exchange_of_goods')>{{ __('Exchange of Goods') }}</option></select></div>

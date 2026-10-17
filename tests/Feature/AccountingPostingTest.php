@@ -8,6 +8,7 @@ use App\Models\Customer;
 use App\Models\JournalEntry;
 use App\Models\Material;
 use App\Models\Payment;
+use App\Models\RecycleOut;
 use App\Models\Setting;
 use App\Models\StockPurchase;
 use App\Models\StockSale;
@@ -86,6 +87,34 @@ class AccountingPostingTest extends TestCase
         $this->assertSame(700.0, $entry->total_credit);
         $this->assertTrue($entry->lines->contains(fn ($line) => $line->account->code === '1110' && (float) $line->debit === 700.0));
         $this->assertTrue($entry->lines->contains(fn ($line) => $line->account->code === '1300' && (float) $line->credit === 700.0));
+    }
+
+    public function test_negative_recycle_out_correction_reverses_revenue_and_receivable(): void
+    {
+        $customer = Customer::create(['name' => 'Customer', 'status' => 'active']);
+        $correction = RecycleOut::create([
+            'date' => '2026-01-05',
+            'customer_id' => $customer->id,
+            'transaction_type' => 'correction',
+            'weight_kg' => -10,
+            'recycled_out_kg' => -10,
+            'waste_kg' => 0,
+            'non_recycled_kg' => 0,
+            'rate_per_kg' => 2,
+            'total_amount' => -20,
+            'notes' => 'Correction',
+        ]);
+
+        $this->posting->postOperational($correction, $this->admin);
+
+        $this->assertDatabaseHas('journal_entry_lines', [
+            'account_id' => $this->posting->mappedAccount('recycling_service_income')->id,
+            'debit' => 20,
+        ]);
+        $this->assertDatabaseHas('journal_entry_lines', [
+            'account_id' => $this->posting->mappedAccount('accounts_receivable_control')->id,
+            'credit' => 20,
+        ]);
     }
 
     public function test_stock_purchase_and_sale_create_inventory_revenue_and_cogs_entries(): void

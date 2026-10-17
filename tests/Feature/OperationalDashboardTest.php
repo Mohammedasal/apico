@@ -141,6 +141,23 @@ class OperationalDashboardTest extends TestCase
             ->assertSee('30.000');
     }
 
+    public function test_recycle_output_metrics_exclude_explicit_corrections(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $customer = Customer::create(['name' => 'Customer', 'status' => 'active']);
+        RecycleOut::create(['date' => '2026-07-10', 'customer_id' => $customer->id, 'transaction_type' => 'output', 'weight_kg' => 100, 'recycled_out_kg' => 80, 'waste_kg' => 20, 'non_recycled_kg' => 0, 'rate_per_kg' => 1, 'total_amount' => 80]);
+        RecycleOut::create(['date' => '2026-07-11', 'customer_id' => $customer->id, 'transaction_type' => 'correction', 'weight_kg' => -30, 'recycled_out_kg' => 0, 'waste_kg' => -30, 'non_recycled_kg' => 0, 'rate_per_kg' => 0, 'total_amount' => 0, 'notes' => 'Correction']);
+
+        $this->actingAs($admin)->get(route('dashboards.recycle-out', [
+            'period' => 'monthly',
+            'month' => '2026-07',
+        ]))->assertOk()
+            ->assertViewHas('summary', fn (array $summary) => $summary['total_kg'] === 100.0
+                && $summary['waste_kg'] === 20.0
+                && $summary['waste_percentage'] === 20.0
+                && $summary['transactions'] === 1);
+    }
+
     public function test_dashboard_permissions_hide_profit_and_reject_data_entry(): void
     {
         $viewer = User::factory()->create(['role' => 'viewer', 'is_active' => true]);

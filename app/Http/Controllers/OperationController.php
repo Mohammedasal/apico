@@ -346,9 +346,10 @@ class OperationController extends Controller
                 'date' => ['required', 'date'],
                 'customer_id' => ['required', 'exists:customers,id'],
                 'material_id' => ['nullable', 'exists:materials,id'],
-                'recycled_out_kg' => ['nullable', 'numeric', 'min:0'],
-                'waste_kg' => ['nullable', 'numeric', 'min:0'],
-                'non_recycled_kg' => ['nullable', 'numeric', 'min:0'],
+                'transaction_type' => ['nullable', 'in:output,return,correction'],
+                'recycled_out_kg' => ['nullable', 'numeric'],
+                'waste_kg' => ['nullable', 'numeric'],
+                'non_recycled_kg' => ['nullable', 'numeric'],
                 'rate_per_kg' => ['required', 'numeric', 'min:0'],
                 'notes' => ['nullable', 'string'],
             ]),
@@ -368,20 +369,35 @@ class OperationController extends Controller
         }
 
         if ($module === 'recycle-out') {
+            $data['transaction_type'] = $data['transaction_type'] ?? 'output';
             $data['recycled_out_kg'] = (float) ($data['recycled_out_kg'] ?? 0);
             $data['waste_kg'] = (float) ($data['waste_kg'] ?? 0);
             $data['non_recycled_kg'] = (float) ($data['non_recycled_kg'] ?? 0);
             $data['weight_kg'] = round($data['recycled_out_kg'] + $data['waste_kg'] + $data['non_recycled_kg'], 3);
 
-            if ($data['weight_kg'] <= 0) {
+            if ($data['transaction_type'] === 'output' && collect([
+                $data['recycled_out_kg'], $data['waste_kg'], $data['non_recycled_kg'],
+            ])->contains(fn (float $value) => $value < 0)) {
+                throw ValidationException::withMessages(['recycled_out_kg' => __('Normal output weights cannot be negative.')]);
+            }
+
+            if (($data['transaction_type'] === 'output' && $data['weight_kg'] <= 0)
+                || ($data['transaction_type'] !== 'output' && abs($data['weight_kg']) < 0.0005)) {
                 throw ValidationException::withMessages(['recycled_out_kg' => 'Enter recycled out, waste, or non-recycled weight.']);
+            }
+
+            if ($data['transaction_type'] !== 'output' && blank($data['notes'] ?? null)) {
+                throw ValidationException::withMessages(['notes' => __('A reason is required for returns and corrections.')]);
             }
 
             if ($data['recycled_out_kg'] > 0 && (float) $data['rate_per_kg'] === 0.0 && blank($data['notes'] ?? null)) {
                 throw ValidationException::withMessages(['notes' => 'A note is required when price is zero.']);
             }
 
-            $data['total_amount'] = $calculator->recycleTotal((float) $data['recycled_out_kg'], (float) $data['rate_per_kg']);
+            $data['calculated_amount'] = $calculator->recycleTotal((float) $data['recycled_out_kg'], (float) $data['rate_per_kg']);
+            $data['total_amount'] = $data['calculated_amount'];
+            $data['amount_variance'] = 0;
+            $data['override_reason'] = null;
         }
 
         if ($module === 'payments' && (float) $data['amount'] < 0 && blank($data['notes'] ?? null)) {

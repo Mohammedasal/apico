@@ -42,6 +42,7 @@ class OperationalDashboardController extends Controller
     {
         $period = $this->period($request);
         $rows = RecycleOut::with(['customer', 'material'])
+            ->where('transaction_type', 'output')
             ->tap(fn (Builder $query) => $this->applyPeriod($query, $period))
             ->orderBy('date')
             ->orderBy('id')

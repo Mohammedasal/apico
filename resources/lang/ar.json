@@ -702,5 +702,13 @@
     "Cash": "الصندوق",
     "Bank": "البنك",
     "Operational Journal Coverage": "تغطية القيود التشغيلية",
-    ":count expected journal(s) are missing. Run the dry-run backfill before relying on accounting reports.": "يوجد :count قيد متوقع مفقود. شغّل المعاينة التجريبية للترحيل قبل الاعتماد على التقارير المحاسبية."
+    ":count expected journal(s) are missing. Run the dry-run backfill before relying on accounting reports.": "يوجد :count قيد متوقع مفقود. شغّل المعاينة التجريبية للترحيل قبل الاعتماد على التقارير المحاسبية.",
+    "Transaction Type": "نوع الحركة",
+    "Output": "إنتاج",
+    "Return": "مرتجع",
+    "Correction": "تصحيح",
+    "Variance": "الفرق",
+    "Imported Amount Variance": "فرق المبلغ المستورد",
+    "Normal output weights cannot be negative.": "لا يمكن أن تكون أوزان الإنتاج العادي سالبة.",
+    "A reason is required for returns and corrections.": "السبب مطلوب للمرتجعات والتصحيحات."
 }

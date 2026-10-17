@@ -687,15 +687,16 @@ class AccountingPostingService
 
     private function postRecycleOut(RecycleOut $source, ?User $user): Collection
     {
-        $amount = round((float) $source->total_amount, 3);
+        $signedAmount = round((float) $source->total_amount, 3);
+        $amount = abs($signedAmount);
 
-        if ($amount <= 0) {
+        if ($amount < 0.0005) {
             return collect();
         }
 
         return collect([$this->postSourceEntry($source, 'recycle_out_revenue', $amount, [
-            $this->line($this->mappedAccount('accounts_receivable_control')->id, $amount, 0, customerId: $source->customer_id, materialId: $source->material_id),
-            $this->line($this->mappedAccount('recycling_service_income')->id, 0, $amount, customerId: $source->customer_id, materialId: $source->material_id),
+            $this->line($this->mappedAccount('accounts_receivable_control')->id, $signedAmount > 0 ? $amount : 0, $signedAmount < 0 ? $amount : 0, customerId: $source->customer_id, materialId: $source->material_id),
+            $this->line($this->mappedAccount('recycling_service_income')->id, $signedAmount < 0 ? $amount : 0, $signedAmount > 0 ? $amount : 0, customerId: $source->customer_id, materialId: $source->material_id),
         ], $user)]);
     }
 

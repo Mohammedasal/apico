@@ -23,7 +23,7 @@ class DashboardController extends Controller
             ->when($from, fn ($query) => $query->whereDate('date', '>=', $from))
             ->when($to, fn ($query) => $query->whereDate('date', '<=', $to));
 
-        $recycleOutKg = RecycleOut::query()->tap($dateRange)->sum('weight_kg');
+        $recycleOutKg = RecycleOut::query()->where('transaction_type', 'output')->tap($dateRange)->sum('weight_kg');
         $productionEntries = ProductionDay::query()
             ->when($from, fn ($query) => $query->whereDate('date', '>=', $from))
             ->when($to, fn ($query) => $query->whereDate('date', '<=', $to))
@@ -38,7 +38,7 @@ class DashboardController extends Controller
         ]);
         $receivables = $customerBalances->sum(fn (array $customer) => max(0, $customer['remaining_jod']));
         $productionDays = $productionEntries->filter(fn (ProductionDay $day) => $day->total_kg > 0)->count();
-        $wasteKg = RecycleOut::query()->tap($dateRange)->sum('waste_kg');
+        $wasteKg = RecycleOut::query()->where('transaction_type', 'output')->tap($dateRange)->sum('waste_kg');
         $stockProfit = $calculator->stockProfitSummary($from, $to);
         $actualProfit = $calculator->actualProfitSummary($from, $to);
         $lastCompletedMonthCost = $calculator->lastCompletedMonthActualCostPerTon();

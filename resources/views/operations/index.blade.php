@@ -124,6 +124,7 @@
                 <td>
                     {{ number_format($record->weight_kg, 3) }}
                     @if ($module === 'recycle-out')
+                        <div><strong>{{ __(ucfirst($record->transaction_type ?? 'output')) }}</strong></div>
                         <div class="muted">R {{ number_format($record->recycled_out_kg, 3) }} | W {{ number_format($record->waste_kg, 3) }} | NR {{ number_format($record->non_recycled_kg, 3) }}</div>
                     @endif
                 </td>
@@ -131,6 +132,7 @@
             <td>
                 @if ($module === 'recycle-out')
                     {{ number_format($record->recycled_out_kg, 3) }} x {{ number_format($record->rate_per_kg, 3) }} = {{ number_format($record->total_amount, 3) }}
+                    @if (abs((float) $record->amount_variance) >= 0.0005)<div class="muted">{{ __('Variance') }} {{ number_format((float) $record->amount_variance, 3) }}</div>@endif
                 @elseif (isset($record->total_amount)) {{ number_format($record->total_amount, 3) }}
                 @elseif (isset($record->amount)) {{ number_format($record->amount, 3) }}
                 @elseif (isset($record->total_cost)) {{ number_format($record->total_cost, 3) }}

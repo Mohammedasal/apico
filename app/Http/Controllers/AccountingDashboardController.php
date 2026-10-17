@@ -43,7 +43,7 @@ class AccountingDashboardController extends Controller
                 $entry->source_type.':'.$entry->source_id.':'.$entry->posting_type => true,
             ]);
         $expected = collect();
-        RecycleOut::where('total_amount', '>', 0)->each(fn (RecycleOut $row) => $expected->push('RecycleOut:'.$row->id.':recycle_out_revenue'));
+        RecycleOut::where('total_amount', '!=', 0)->each(fn (RecycleOut $row) => $expected->push('RecycleOut:'.$row->id.':recycle_out_revenue'));
         Payment::each(fn (Payment $row) => $expected->push('Payment:'.$row->id.':customer_payment'));
         StockPurchase::each(fn (StockPurchase $row) => $expected->push('StockPurchase:'.$row->id.':stock_purchase'));
         StockSale::each(function (StockSale $row) use ($expected) {

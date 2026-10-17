@@ -129,6 +129,38 @@ class OperationValidationTest extends TestCase
         $this->assertDatabaseHas('recycle_outs', ['material_id' => null, 'weight_kg' => 10]);
     }
 
+    public function test_recycle_out_correction_requires_reason_and_preserves_signed_effect(): void
+    {
+        $customer = Customer::create(['name' => 'Customer', 'status' => 'active']);
+
+        $missingReason = $this->post(route('operations.store', 'recycle-out'), [
+            'date' => '2026-01-01',
+            'customer_id' => $customer->id,
+            'transaction_type' => 'correction',
+            'recycled_out_kg' => -25,
+            'rate_per_kg' => 0.12,
+        ]);
+        $missingReason->assertSessionHasErrors('notes');
+
+        $response = $this->post(route('operations.store', 'recycle-out'), [
+            'date' => '2026-01-01',
+            'customer_id' => $customer->id,
+            'transaction_type' => 'correction',
+            'recycled_out_kg' => -25,
+            'rate_per_kg' => 0.12,
+            'notes' => 'Correct duplicate output',
+        ]);
+
+        $response->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('recycle_outs', [
+            'transaction_type' => 'correction',
+            'weight_kg' => -25,
+            'total_amount' => -3,
+            'calculated_amount' => -3,
+            'amount_variance' => 0,
+        ]);
+    }
+
     public function test_stock_purchase_material_is_optional(): void
     {
         $supplier = Supplier::create(['name' => 'Supplier', 'status' => 'active']);
