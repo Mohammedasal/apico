@@ -140,6 +140,9 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::post('/journals/{journal}/reverse', [JournalEntryController::class, 'reverse'])->name('journals.reverse');
         Route::get('/reports/trial-balance', [AccountingReportController::class, 'trialBalance'])->name('reports.trial-balance');
         Route::get('/reports/trial-balance/export', [AccountingReportController::class, 'trialBalanceExport'])->name('reports.trial-balance.export');
+        Route::get('/reports/general-ledger', [AccountingReportController::class, 'generalLedger'])->name('reports.general-ledger');
+        Route::get('/reports/profit-loss', [AccountingReportController::class, 'profitLoss'])->name('reports.profit-loss');
+        Route::get('/reports/balance-sheet', [AccountingReportController::class, 'balanceSheet'])->name('reports.balance-sheet');
     });
 
     Route::prefix('accounting')->name('accounting.')->middleware('role:admin')->group(function () {

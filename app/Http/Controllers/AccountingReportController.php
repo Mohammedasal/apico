@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ChartOfAccount;
+use App\Models\JournalEntry;
 use App\Models\JournalEntryLine;
 use App\Services\SimpleXlsxExporter;
 use Illuminate\Http\Request;
@@ -11,6 +12,97 @@ use Illuminate\Validation\Rule;
 
 class AccountingReportController extends Controller
 {
+    public function generalLedger(Request $request)
+    {
+        $validated = $request->validate([
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date', 'after_or_equal:from'],
+            'account_id' => ['nullable', 'exists:chart_of_accounts,id'],
+            'q' => ['nullable', 'string', 'max:255'],
+        ]);
+        $from = $validated['from'] ?? now()->startOfYear()->toDateString();
+        $to = $validated['to'] ?? now()->toDateString();
+        $accountId = isset($validated['account_id']) ? (int) $validated['account_id'] : null;
+        $search = trim((string) ($validated['q'] ?? ''));
+        $opening = JournalEntryLine::query()
+            ->join('journal_entries', 'journal_entries.id', '=', 'journal_entry_lines.journal_entry_id')
+            ->whereIn('journal_entries.status', ['posted', 'reversed'])
+            ->whereDate('journal_entries.entry_date', '<', $from)
+            ->when($accountId, fn ($query) => $query->where('journal_entry_lines.account_id', $accountId))
+            ->selectRaw('COALESCE(SUM(journal_entry_lines.debit - journal_entry_lines.credit), 0) AS balance')
+            ->value('balance');
+        $running = round((float) $opening, 3);
+        $lines = JournalEntryLine::with(['journalEntry', 'account', 'customer', 'supplier'])
+            ->whereHas('journalEntry', function ($query) use ($from, $to, $search) {
+                $query->whereIn('status', ['posted', 'reversed'])
+                    ->whereDate('entry_date', '>=', $from)
+                    ->whereDate('entry_date', '<=', $to)
+                    ->when($search !== '', fn ($query) => $query->where(function ($query) use ($search) {
+                        $query->where('entry_no', 'like', "%{$search}%")
+                            ->orWhere('memo_en', 'like', "%{$search}%")
+                            ->orWhere('memo_ar', 'like', "%{$search}%");
+                    }));
+            })
+            ->when($accountId, fn ($query) => $query->where('account_id', $accountId))
+            ->orderBy(
+                JournalEntry::select('entry_date')->whereColumn('journal_entries.id', 'journal_entry_lines.journal_entry_id')
+            )
+            ->orderBy('journal_entry_id')
+            ->orderBy('id')
+            ->get()
+            ->map(function (JournalEntryLine $line) use (&$running) {
+                $running = round($running + (float) $line->debit - (float) $line->credit, 3);
+
+                return ['line' => $line, 'running_balance' => $running];
+            });
+
+        return view('accounting.reports.general-ledger', [
+            'rows' => $lines,
+            'accounts' => ChartOfAccount::where('is_posting', true)->orderBy('code')->get(),
+            'filters' => ['from' => $from, 'to' => $to, 'account_id' => $accountId, 'q' => $search],
+            'openingBalance' => round((float) $opening, 3),
+            'periodDebit' => round((float) $lines->sum(fn ($row) => $row['line']->debit), 3),
+            'periodCredit' => round((float) $lines->sum(fn ($row) => $row['line']->credit), 3),
+            'closingBalance' => $running,
+        ]);
+    }
+
+    public function profitLoss(Request $request)
+    {
+        [$from, $to] = $this->dateRange($request);
+        $rows = $this->accountPeriodBalances($from, $to, ['revenue', 'cogs', 'expense']);
+        $revenue = round((float) $rows->where('type', 'revenue')->sum('amount'), 3);
+        $cogs = round((float) $rows->where('type', 'cogs')->sum('amount'), 3);
+        $expenses = round((float) $rows->where('type', 'expense')->sum('amount'), 3);
+
+        return view('accounting.reports.profit-loss', compact('from', 'to', 'rows', 'revenue', 'cogs', 'expenses') + [
+            'grossProfit' => round($revenue - $cogs, 3),
+            'netProfit' => round($revenue - $cogs - $expenses, 3),
+        ]);
+    }
+
+    public function balanceSheet(Request $request)
+    {
+        $request->validate(['to' => ['nullable', 'date']]);
+        $to = $request->input('to', now()->toDateString());
+        $rows = $this->accountPeriodBalances('1900-01-01', $to, ['asset', 'liability', 'equity']);
+        $incomeRows = $this->accountPeriodBalances('1900-01-01', $to, ['revenue', 'cogs', 'expense']);
+        $assets = round((float) $rows->where('type', 'asset')->sum('amount'), 3);
+        $liabilities = round((float) $rows->where('type', 'liability')->sum('amount'), 3);
+        $equity = round((float) $rows->where('type', 'equity')->sum('amount'), 3);
+        $currentEarnings = round(
+            (float) $incomeRows->where('type', 'revenue')->sum('amount')
+            - (float) $incomeRows->where('type', 'cogs')->sum('amount')
+            - (float) $incomeRows->where('type', 'expense')->sum('amount'),
+            3
+        );
+
+        return view('accounting.reports.balance-sheet', compact('to', 'rows', 'assets', 'liabilities', 'equity', 'currentEarnings') + [
+            'liabilitiesAndEquity' => round($liabilities + $equity + $currentEarnings, 3),
+            'difference' => round($assets - $liabilities - $equity - $currentEarnings, 3),
+        ]);
+    }
+
     public function trialBalance(Request $request)
     {
         return view('accounting.reports.trial-balance', $this->trialBalanceData($request) + [
@@ -158,5 +250,54 @@ class AccountingReportController extends Controller
             'closing_debit' => __('Closing Debit'),
             'closing_credit' => __('Closing Credit'),
         ];
+    }
+
+    private function dateRange(Request $request): array
+    {
+        $validated = $request->validate([
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date', 'after_or_equal:from'],
+        ]);
+
+        return [
+            $validated['from'] ?? now()->startOfYear()->toDateString(),
+            $validated['to'] ?? now()->toDateString(),
+        ];
+    }
+
+    private function accountPeriodBalances(string $from, string $to, array $types): Collection
+    {
+        $movements = JournalEntryLine::query()
+            ->join('journal_entries', 'journal_entries.id', '=', 'journal_entry_lines.journal_entry_id')
+            ->whereIn('journal_entries.status', ['posted', 'reversed'])
+            ->whereDate('journal_entries.entry_date', '>=', $from)
+            ->whereDate('journal_entries.entry_date', '<=', $to)
+            ->selectRaw('journal_entry_lines.account_id, SUM(journal_entry_lines.debit) AS debit, SUM(journal_entry_lines.credit) AS credit')
+            ->groupBy('journal_entry_lines.account_id')
+            ->get()
+            ->keyBy('account_id');
+
+        return ChartOfAccount::where('is_posting', true)
+            ->whereIn('type', $types)
+            ->orderBy('sort_order')
+            ->orderBy('code')
+            ->get()
+            ->map(function (ChartOfAccount $account) use ($movements) {
+                $movement = $movements->get($account->id);
+                $debit = (float) ($movement->debit ?? 0);
+                $credit = (float) ($movement->credit ?? 0);
+                $amount = in_array($account->type, ['liability', 'equity', 'revenue'], true)
+                    ? $credit - $debit
+                    : $debit - $credit;
+
+                return [
+                    'code' => $account->code,
+                    'account' => $account->localized_name,
+                    'type' => $account->type,
+                    'amount' => round($amount, 3),
+                ];
+            })
+            ->filter(fn (array $row) => abs($row['amount']) >= 0.0005)
+            ->values();
     }
 }

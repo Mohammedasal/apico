@@ -21,6 +21,9 @@
             request()->routeIs('settings.*') => 'Settings',
             request()->routeIs('users.*') => 'Users',
             request()->routeIs('accounting.reports.trial-balance*') => 'Trial Balance',
+            request()->routeIs('accounting.reports.general-ledger*') => 'General Ledger',
+            request()->routeIs('accounting.reports.profit-loss*') => 'Accounting P&L',
+            request()->routeIs('accounting.reports.balance-sheet*') => 'Balance Sheet',
             request()->routeIs('accounting.expenses.*') => 'Expense Vouchers',
             request()->routeIs('accounting.expense-categories.*') => 'Expense Categories',
             request()->routeIs('accounting.employees.*') => 'Employees',
@@ -225,6 +228,9 @@
             @endif
             <a @class(['active' => request()->routeIs('accounting.journals.*')]) href="{{ route('accounting.journals.index') }}">{{ __('Journal Entries') }}</a>
             <a @class(['active' => request()->routeIs('accounting.reports.trial-balance*')]) href="{{ route('accounting.reports.trial-balance') }}">{{ __('Trial Balance') }}</a>
+            <a @class(['active' => request()->routeIs('accounting.reports.general-ledger*')]) href="{{ route('accounting.reports.general-ledger') }}">{{ __('General Ledger') }}</a>
+            <a @class(['active' => request()->routeIs('accounting.reports.profit-loss*')]) href="{{ route('accounting.reports.profit-loss') }}">{{ __('Accounting P&L') }}</a>
+            <a @class(['active' => request()->routeIs('accounting.reports.balance-sheet*')]) href="{{ route('accounting.reports.balance-sheet') }}">{{ __('Balance Sheet') }}</a>
             <a @class(['active' => request()->routeIs('accounting.expenses.*')]) href="{{ route('accounting.expenses.index') }}">{{ __('Expenses') }}</a>
             <a @class(['active' => request()->routeIs('accounting.expense-categories.*')]) href="{{ route('accounting.expense-categories.index') }}">{{ __('Expense Categories') }}</a>
             <a @class(['active' => request()->routeIs('accounting.salary-advances.*')]) href="{{ route('accounting.salary-advances.index') }}">{{ __('Salary Advances') }}</a>

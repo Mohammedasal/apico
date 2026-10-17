@@ -1,0 +1,8 @@
+@extends('layouts.app')
+
+@section('content')
+<div class="section-title"><div><h1>{{ __('Balance Sheet') }}</h1><div class="muted">{{ __('Posted journal balances as of the selected date.') }}</div></div></div>
+<form class="filters" method="get"><div><label>{{ __('As Of') }}</label><input type="date" name="to" value="{{ $to }}"></div><div><button>{{ __('Apply') }}</button></div></form>
+<div class="grid" style="margin:16px 0"><div class="card kpi-card"><div class="muted">{{ __('Assets') }}</div><div class="kpi">{{ number_format($assets, 3) }}</div></div><div class="card kpi-card"><div class="muted">{{ __('Liabilities') }}</div><div class="kpi">{{ number_format($liabilities, 3) }}</div></div><div class="card kpi-card"><div class="muted">{{ __('Equity') }}</div><div class="kpi">{{ number_format($equity, 3) }}</div></div><div class="card kpi-card"><div class="muted">{{ __('Current Earnings') }}</div><div class="kpi">{{ number_format($currentEarnings, 3) }}</div></div><div class="card kpi-card"><div class="muted">{{ __('Balance Difference') }}</div><div class="kpi">{{ number_format($difference, 3) }}</div></div></div>
+<div class="table-wrap"><table><thead><tr><th>{{ __('Code') }}</th><th>{{ __('Account') }}</th><th>{{ __('Account Type') }}</th><th>{{ __('Balance') }}</th></tr></thead><tbody>@foreach ($rows as $row)<tr><td>{{ $row['code'] }}</td><td>{{ $row['account'] }}</td><td>{{ __(ucfirst($row['type'])) }}</td><td>{{ number_format($row['amount'], 3) }}</td></tr>@endforeach<tr><th colspan="3">{{ __('Current Earnings') }}</th><th>{{ number_format($currentEarnings, 3) }}</th></tr></tbody></table></div>
+@endsection

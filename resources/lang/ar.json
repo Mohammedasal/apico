@@ -671,5 +671,20 @@
     "Upcoming": "قريب الاستحقاق",
     "Scheduled": "مجدول",
     "No Due Date": "بدون تاريخ استحقاق",
-    "Settled": "تمت التسوية"
+    "Settled": "تمت التسوية",
+    "General Ledger": "دفتر الأستاذ العام",
+    "Accounting P&L": "الأرباح والخسائر المحاسبية",
+    "Balance Sheet": "الميزانية العمومية",
+    "Posted journal lines with opening and running balances.": "سطور القيود المرحلة مع الرصيد الافتتاحي والرصيد الجاري.",
+    "Entry number or memo": "رقم القيد أو البيان",
+    "No ledger activity for this period.": "لا توجد حركة في دفتر الأستاذ لهذه الفترة.",
+    "Posted journal revenue, cost of goods sold, and expenses.": "الإيرادات وتكلفة البضاعة المباعة والمصاريف من القيود المرحلة.",
+    "COGS": "تكلفة البضاعة المباعة",
+    "Gross Profit": "إجمالي الربح",
+    "Posted journal balances as of the selected date.": "أرصدة القيود المرحلة حتى التاريخ المحدد.",
+    "As Of": "كما في",
+    "Assets": "الأصول",
+    "Liabilities": "الالتزامات",
+    "Current Earnings": "أرباح الفترة",
+    "Balance": "الرصيد"
 }
