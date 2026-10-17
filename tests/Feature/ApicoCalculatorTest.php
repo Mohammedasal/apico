@@ -146,6 +146,31 @@ class ApicoCalculatorTest extends TestCase
         $this->assertSame(350.0, $summary['profit']);
     }
 
+    public function test_filtered_stock_profit_rows_reconcile_exactly_to_the_filtered_summary(): void
+    {
+        $calculator = app(ApicoCalculator::class);
+        $firstCustomer = Customer::create(['name' => 'First Buyer', 'status' => 'active']);
+        $secondCustomer = Customer::create(['name' => 'Second Buyer', 'status' => 'active']);
+        $material = Material::create(['name' => 'HDPE', 'type' => 'stock', 'is_active' => true]);
+
+        ProductionDay::create(['date' => '2026-04-01', 'shift_one_kg' => 1000, 'shift_two_kg' => 0]);
+        MonthlyExpense::create(['year' => 2026, 'month' => 4, 'electricity_bill' => 100]);
+        StockPurchase::create(['date' => '2026-04-01', 'supplier_name' => 'Supplier', 'material_id' => $material->id, 'weight_kg' => 1000, 'cost_per_kg' => 0.2, 'total_cost' => 200]);
+        $included = StockSale::create(['date' => '2026-04-02', 'customer_id' => $firstCustomer->id, 'material_id' => $material->id, 'weight_kg' => 200, 'selling_price_per_kg' => 1, 'sales_value' => 200, 'net_profit' => 999]);
+        StockSale::create(['date' => '2026-04-03', 'customer_id' => $secondCustomer->id, 'material_id' => $material->id, 'weight_kg' => 300, 'selling_price_per_kg' => 1, 'sales_value' => 300, 'net_profit' => 999]);
+
+        $sales = StockSale::whereKey($included->id)->get();
+        $breakdown = $calculator->stockSaleProfitBreakdown($sales->pluck('id')->all());
+        $summary = $calculator->stockProfitSummaryForSales($sales);
+
+        $this->assertSame(40.0, $breakdown[$included->id]['material_cogs']);
+        $this->assertSame(20.0, $breakdown[$included->id]['conversion_cost']);
+        $this->assertSame(140.0, $breakdown[$included->id]['profit']);
+        $this->assertSame(200.0, $summary['revenue']);
+        $this->assertSame(140.0, $summary['profit']);
+        $this->assertSame($summary['profit'], round((float) $breakdown->sum('profit'), 3));
+    }
+
     public function test_actual_profit_summary_subtracts_stock_cogs_and_operating_expenses_once(): void
     {
         $calculator = app(ApicoCalculator::class);

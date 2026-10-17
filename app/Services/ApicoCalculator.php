@@ -3,8 +3,8 @@
 namespace App\Services;
 
 use App\Models\Customer;
-use App\Models\Payment;
 use App\Models\MonthlyExpense;
+use App\Models\Payment;
 use App\Models\ProductionDay;
 use App\Models\RecycleIn;
 use App\Models\RecycleOut;
@@ -71,6 +71,7 @@ class ApicoCalculator
             if ($transaction['type'] === 'purchase') {
                 $inventoryKg += $transaction['weight_kg'];
                 $inventoryValue += $transaction['amount'];
+
                 continue;
             }
 
@@ -100,42 +101,100 @@ class ApicoCalculator
             ->when($from, fn ($query) => $query->whereDate('date', '>=', $from))
             ->when($to, fn ($query) => $query->whereDate('date', '<=', $to));
 
-        $revenue = (float) StockSale::query()->tap($dateRange)->sum('sales_value');
-        $materialCogs = $this->stockMaterialCogs($from, $to);
         $sales = StockSale::query()
             ->tap($dateRange)
-            ->get(['date', 'weight_kg'])
-            ->groupBy(fn (StockSale $sale) => $sale->date->format('Y-m'));
+            ->get();
 
-        $recycleCost = $sales->sum(function (Collection $monthSales, string $yearMonth) {
-            [$year, $month] = array_map('intval', explode('-', $yearMonth));
-            $monthStart = Carbon::create($year, $month, 1);
-            $monthEnd = $monthStart->copy()->endOfMonth();
-            $productionKg = ProductionDay::whereDate('date', '>=', $monthStart->toDateString())
-                ->whereDate('date', '<=', $monthEnd->toDateString())
-                ->get()
-                ->sum(fn (ProductionDay $day) => (float) $day->total_kg);
-            $productionTons = $productionKg / 1000;
+        return $this->stockProfitSummaryForSales($sales);
+    }
 
-            if ($productionTons <= 0) {
-                return 0;
-            }
-
-            $expense = MonthlyExpense::where('year', $year)->where('month', $month)->first();
-            $costPerTon = ((float) ($expense?->total_expenses ?? 0)) / $productionTons;
-            $soldTons = $monthSales->sum(fn (StockSale $sale) => (float) $sale->weight_kg) / 1000;
-
-            return $soldTons * $costPerTon;
-        });
+    public function stockProfitSummaryForSales(Collection $sales): array
+    {
+        $breakdown = $this->stockSaleProfitBreakdown($sales->pluck('id')->all());
+        $revenue = (float) $sales->sum('sales_value');
+        $materialCogs = (float) $breakdown->sum('material_cogs');
+        $recycleCost = (float) $breakdown->sum('conversion_cost');
 
         return [
             'revenue' => round($revenue, 3),
             'material_cogs' => round($materialCogs, 3),
             'purchases' => round($materialCogs, 3),
-            'recycle_cost' => round((float) $recycleCost, 3),
-            'profit' => round($revenue - $materialCogs - (float) $recycleCost, 3),
-            'sold_kg' => round((float) StockSale::query()->tap($dateRange)->sum('weight_kg'), 3),
+            'recycle_cost' => round($recycleCost, 3),
+            'profit' => round($revenue - $materialCogs - $recycleCost, 3),
+            'sold_kg' => round((float) $sales->sum('weight_kg'), 3),
         ];
+    }
+
+    public function stockSaleProfitBreakdown(array $saleIds): Collection
+    {
+        $saleIds = collect($saleIds)->map(fn ($id) => (int) $id)->filter()->unique()->values();
+
+        if ($saleIds->isEmpty()) {
+            return collect();
+        }
+
+        $selectedSales = StockSale::whereKey($saleIds->all())->get(['id', 'date']);
+        $lastDate = $selectedSales->max(fn (StockSale $sale) => $sale->date->toDateString());
+        $inventory = [];
+        $rows = collect();
+
+        $purchases = StockPurchase::whereDate('date', '<=', $lastDate)
+            ->get(['id', 'date', 'material_id', 'weight_kg', 'total_cost'])
+            ->map(fn (StockPurchase $purchase) => [
+                'id' => $purchase->id,
+                'type' => 'purchase',
+                'date' => $purchase->date->toDateString(),
+                'sort' => 10,
+                'material_id' => $purchase->material_id,
+                'weight_kg' => (float) $purchase->weight_kg,
+                'amount' => (float) $purchase->total_cost,
+            ]);
+        $sales = StockSale::whereDate('date', '<=', $lastDate)
+            ->get(['id', 'date', 'material_id', 'weight_kg', 'sales_value'])
+            ->map(fn (StockSale $sale) => [
+                'id' => $sale->id,
+                'type' => 'sale',
+                'date' => $sale->date->toDateString(),
+                'sort' => 20,
+                'material_id' => $sale->material_id,
+                'weight_kg' => (float) $sale->weight_kg,
+                'amount' => (float) $sale->sales_value,
+            ]);
+
+        foreach ($purchases->merge($sales)->sortBy([['date', 'asc'], ['sort', 'asc'], ['id', 'asc']]) as $transaction) {
+            $key = $transaction['material_id'] ?? 0;
+            $inventory[$key] ??= ['kg' => 0.0, 'value' => 0.0];
+            $averageCost = $inventory[$key]['kg'] > 0 ? $inventory[$key]['value'] / $inventory[$key]['kg'] : 0.0;
+
+            if ($transaction['type'] === 'purchase') {
+                $inventory[$key]['kg'] += $transaction['weight_kg'];
+                $inventory[$key]['value'] += $transaction['weight_kg'] < 0 && $transaction['amount'] == 0.0
+                    ? $transaction['weight_kg'] * $averageCost
+                    : $transaction['amount'];
+
+                continue;
+            }
+
+            $materialCogs = $transaction['weight_kg'] * $averageCost;
+            $inventory[$key]['kg'] -= $transaction['weight_kg'];
+            $inventory[$key]['value'] -= $materialCogs;
+
+            if (! $saleIds->contains($transaction['id'])) {
+                continue;
+            }
+
+            $date = Carbon::parse($transaction['date']);
+            $costPerTon = $this->actualCostPerTon($date->year, $date->month);
+            $conversionCost = ($transaction['weight_kg'] / 1000) * $costPerTon;
+
+            $rows->put($transaction['id'], [
+                'material_cogs' => round($materialCogs, 3),
+                'conversion_cost' => round($conversionCost, 3),
+                'profit' => round($transaction['amount'] - $materialCogs - $conversionCost, 3),
+            ]);
+        }
+
+        return $rows;
     }
 
     public function actualCostPerTon(int $year, int $month): float
@@ -213,7 +272,7 @@ class ApicoCalculator
             return 0;
         }
 
-        return (float) MonthlyExpense::where(function ($query) use ($start, $end) {
+        return (float) MonthlyExpense::where(function ($query) use ($start) {
             $query->where('year', '>', $start->year)
                 ->orWhere(fn ($query) => $query->where('year', $start->year)->where('month', '>=', $start->month));
         })
@@ -270,6 +329,7 @@ class ApicoCalculator
                 $inventory[$key]['value'] += $transaction['weight_kg'] < 0 && $transaction['amount'] == 0.0
                     ? $transaction['weight_kg'] * $averageCost
                     : $transaction['amount'];
+
                 continue;
             }
 

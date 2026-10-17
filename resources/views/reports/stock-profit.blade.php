@@ -35,7 +35,7 @@
     <thead><tr><th>{{ __('Date') }}</th><th>{{ __('Customer') }}</th><th>{{ __('Material') }}</th><th>{{ __('Kg') }}</th><th>{{ __('Sales Value') }}</th><th>{{ __('Net Profit') }}</th></tr></thead>
     <tbody>
     @foreach ($sales as $sale)
-        <tr><td>{{ $sale->date->toDateString() }}</td><td>{{ $sale->customer->name }}</td><td>{{ $sale->material?->name ?? '-' }}</td><td>{{ number_format($sale->weight_kg, 3) }}</td><td>{{ number_format($sale->sales_value, 3) }}</td><td>{{ number_format($sale->net_profit, 3) }}</td></tr>
+        <tr><td>{{ $sale->date->toDateString() }}</td><td>{{ $sale->customer->name }}</td><td>{{ $sale->material?->name ?? '-' }}</td><td>{{ number_format($sale->weight_kg, 3) }}</td><td>{{ number_format($sale->sales_value, 3) }}</td><td>{{ number_format($sale->calculated_profit, 3) }}</td></tr>
     @endforeach
     </tbody>
 </table>

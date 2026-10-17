@@ -10,7 +10,9 @@ use ZipArchive;
 class ProductionExcelImporter
 {
     private array $sharedStrings = [];
+
     private array $sheets = [];
+
     private ZipArchive $zip;
 
     public function import(string $path): array
@@ -21,6 +23,8 @@ class ProductionExcelImporter
             $sheet = $this->productionSheet();
             $year = (int) $sheet['name'];
             $cells = $this->sheetCells($sheet['path']);
+            $removedProductionDays = ProductionDay::whereYear('date', $year)->delete();
+            $removedMonthlyExpenses = MonthlyExpense::where('year', $year)->delete();
             $daysImported = $this->importProductionDays($cells, $year);
             $expensesImported = $this->importMonthlyExpenses($cells, $year);
 
@@ -28,6 +32,8 @@ class ProductionExcelImporter
                 'year' => $year,
                 'production_days' => $daysImported,
                 'monthly_expenses' => $expensesImported,
+                'replaced_production_days' => $removedProductionDays,
+                'replaced_monthly_expenses' => $removedMonthlyExpenses,
             ];
         } finally {
             $this->zip->close();
@@ -109,7 +115,7 @@ class ProductionExcelImporter
 
     private function open(string $path): void
     {
-        $this->zip = new ZipArchive();
+        $this->zip = new ZipArchive;
         $this->zip->open($path);
         $this->sharedStrings = $this->sharedStrings();
         $this->sheets = $this->sheets();

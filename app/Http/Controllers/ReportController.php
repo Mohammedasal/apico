@@ -3,12 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\Customer;
+use App\Models\Material;
 use App\Models\Payment;
 use App\Models\RecycleIn;
 use App\Models\RecycleOut;
-use App\Models\StockPurchase;
 use App\Models\StockSale;
-use App\Models\Material;
 use App\Services\ApicoCalculator;
 use App\Services\SimpleXlsxExporter;
 use Illuminate\Http\Request;
@@ -96,6 +95,13 @@ class ReportController extends Controller
         $customerId = $request->integer('customer_id') ?: null;
         $materialId = $request->integer('material_id') ?: null;
         $sales = $this->stockProfitSales($from, $to, $search, $customerId, $materialId)->get();
+        $profitBreakdown = $calculator->stockSaleProfitBreakdown($sales->pluck('id')->all());
+        $sales->each(function (StockSale $sale) use ($profitBreakdown) {
+            $row = $profitBreakdown->get($sale->id, []);
+            $sale->setAttribute('calculated_material_cogs', $row['material_cogs'] ?? 0);
+            $sale->setAttribute('calculated_conversion_cost', $row['conversion_cost'] ?? 0);
+            $sale->setAttribute('calculated_profit', $row['profit'] ?? (float) $sale->sales_value);
+        });
 
         return view('reports.stock-profit', [
             'from' => $from,
@@ -106,13 +112,13 @@ class ReportController extends Controller
             'customers' => Customer::orderBy('name')->get(),
             'materials' => Material::orderBy('name')->get(),
             'sales' => $sales,
-            'summary' => $calculator->stockProfitSummary($from, $to),
+            'summary' => $calculator->stockProfitSummaryForSales($sales),
             'remainingStock' => $calculator->remainingStockWeight(),
             'columns' => $this->stockProfitColumns(),
         ]);
     }
 
-    public function stockProfitExport(Request $request, SimpleXlsxExporter $exporter)
+    public function stockProfitExport(Request $request, ApicoCalculator $calculator, SimpleXlsxExporter $exporter)
     {
         $from = $request->input('from', now()->startOfMonth()->toDateString());
         $to = $request->input('to', now()->toDateString());
@@ -120,14 +126,16 @@ class ReportController extends Controller
         $customerId = $request->integer('customer_id') ?: null;
         $materialId = $request->integer('material_id') ?: null;
         $columns = $this->selectedColumns($this->stockProfitColumns(), $request);
-        $rows = $this->stockProfitSales($from, $to, $search, $customerId, $materialId)->get()->map(fn (StockSale $sale) => [
+        $sales = $this->stockProfitSales($from, $to, $search, $customerId, $materialId)->get();
+        $profitBreakdown = $calculator->stockSaleProfitBreakdown($sales->pluck('id')->all());
+        $rows = $sales->map(fn (StockSale $sale) => [
             'date' => $sale->date?->toDateString(),
             'customer' => $sale->customer?->name,
             'material' => $sale->material?->name ?: '-',
             'weight_kg' => number_format((float) $sale->weight_kg, 3, '.', ''),
             'selling_price_per_kg' => number_format((float) $sale->selling_price_per_kg, 3, '.', ''),
             'sales_value' => number_format((float) $sale->sales_value, 3, '.', ''),
-            'net_profit' => number_format((float) $sale->net_profit, 3, '.', ''),
+            'net_profit' => number_format((float) data_get($profitBreakdown->get($sale->id), 'profit', $sale->sales_value), 3, '.', ''),
             'notes' => $sale->notes,
         ]);
 
