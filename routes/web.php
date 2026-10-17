@@ -36,7 +36,7 @@ Route::middleware('guest')->group(function () {
     Route::post('/login', [AuthController::class, 'store'])->name('login.store');
 });
 
-Route::middleware('auth')->group(function () {
+Route::middleware(['auth', 'active'])->group(function () {
     Route::post('/logout', [AuthController::class, 'destroy'])->name('logout');
     Route::redirect('/', '/dashboard');
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
@@ -49,7 +49,7 @@ Route::middleware('auth')->group(function () {
         ->name('imports.production-sheet.store');
 
     Route::get('/production', [ProductionController::class, 'index'])
-        ->middleware('role:admin')
+        ->middleware('role:admin,accountant')
         ->name('production.index');
     Route::post('/production/days', [ProductionController::class, 'saveDays'])
         ->middleware('role:admin')
@@ -60,20 +60,20 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/cheques-out', [ChequeOutController::class, 'index'])->middleware('role:admin,data_entry,accountant')->name('cheques-out.index');
     Route::post('/cheques-out', [ChequeOutController::class, 'store'])->middleware('role:admin,data_entry,accountant')->name('cheques-out.store');
-    Route::put('/cheques-out/supplier/{supplierPayment}', [ChequeOutController::class, 'updateSupplier'])->middleware('role:admin,data_entry,accountant')->name('cheques-out.supplier.update');
-    Route::put('/cheques-out/expense/{expense}', [ChequeOutController::class, 'updateExpense'])->middleware('role:admin,data_entry,accountant')->name('cheques-out.expense.update');
+    Route::put('/cheques-out/supplier/{supplierPayment}', [ChequeOutController::class, 'updateSupplier'])->middleware('role:admin,accountant')->name('cheques-out.supplier.update');
+    Route::put('/cheques-out/expense/{expense}', [ChequeOutController::class, 'updateExpense'])->middleware('role:admin,accountant')->name('cheques-out.expense.update');
     Route::get('/cheques-out/{chequeOut}/edit', [ChequeOutController::class, 'edit'])->middleware('role:admin,data_entry,accountant')->name('cheques-out.edit');
     Route::put('/cheques-out/{chequeOut}', [ChequeOutController::class, 'update'])->middleware('role:admin,data_entry,accountant')->name('cheques-out.update');
     Route::get('/cheques-in', [ChequeInController::class, 'index'])->middleware('role:admin,data_entry,accountant')->name('cheques-in.index');
-    Route::put('/cheques-in/{payment}', [ChequeInController::class, 'update'])->middleware('role:admin,data_entry,accountant')->name('cheques-in.update');
+    Route::put('/cheques-in/{payment}', [ChequeInController::class, 'update'])->middleware('role:admin,accountant')->name('cheques-in.update');
 
     Route::resource('customers', CustomerController::class)->only(['create', 'store', 'edit', 'update'])->middleware('role:admin,data_entry');
-    Route::get('/customers/{customer}/export', [CustomerController::class, 'export'])->middleware('role:admin,viewer')->name('customers.export');
+    Route::get('/customers/{customer}/export', [CustomerController::class, 'export'])->middleware('role:admin,accountant,viewer')->name('customers.export');
     Route::resource('customers', CustomerController::class)->only(['index', 'show']);
     Route::resource('materials', MaterialController::class)->only(['index']);
     Route::resource('materials', MaterialController::class)->only(['create', 'store', 'edit', 'update'])->middleware('role:admin,data_entry');
     Route::resource('suppliers', SupplierController::class)->only(['create', 'store', 'edit', 'update'])->middleware('role:admin,data_entry');
-    Route::get('/suppliers/{supplier}/export', [SupplierController::class, 'export'])->middleware('role:admin,viewer')->name('suppliers.export');
+    Route::get('/suppliers/{supplier}/export', [SupplierController::class, 'export'])->middleware('role:admin,accountant,viewer')->name('suppliers.export');
     Route::resource('suppliers', SupplierController::class)->only(['index', 'show']);
     Route::resource('supplier-payments', SupplierPaymentController::class)->only(['index']);
     Route::resource('supplier-payments', SupplierPaymentController::class)->only(['create', 'store', 'edit', 'update'])->middleware('role:admin,data_entry');
@@ -90,7 +90,7 @@ Route::middleware('auth')->group(function () {
             Route::delete('/{id}', [OperationController::class, 'destroy'])->middleware('role:admin')->name('destroy');
         });
 
-    Route::middleware('role:admin,viewer')->group(function () {
+    Route::middleware('role:admin,accountant,viewer')->group(function () {
         Route::get('/reports/customer-statement/{customer}', [ReportController::class, 'customerStatement'])->name('reports.customer-statement');
         Route::get('/reports/alerts', [ReportController::class, 'alerts'])->name('reports.alerts');
         Route::get('/reports/alerts/export', [ReportController::class, 'alertsExport'])->name('reports.alerts.export');
@@ -101,11 +101,14 @@ Route::middleware('auth')->group(function () {
         Route::get('/dashboards/recycle-out', [OperationalDashboardController::class, 'recycleOut'])->name('dashboards.recycle-out');
     });
 
-    Route::middleware('role:admin')->group(function () {
+    Route::middleware('role:admin,accountant')->group(function () {
         Route::get('/reports/monthly', [ReportController::class, 'monthly'])->name('reports.monthly');
         Route::get('/reports/monthly/export', [ReportController::class, 'monthlyExport'])->name('reports.monthly.export');
         Route::get('/reports/stock-profit', [ReportController::class, 'stockProfit'])->name('reports.stock-profit');
         Route::get('/reports/stock-profit/export', [ReportController::class, 'stockProfitExport'])->name('reports.stock-profit.export');
+    });
+
+    Route::middleware('role:admin')->group(function () {
         Route::get('/settings', [SettingController::class, 'index'])->name('settings.index');
         Route::put('/settings', [SettingController::class, 'update'])->name('settings.update');
         Route::resource('users', UserController::class)->except(['show', 'destroy']);
