@@ -15,16 +15,14 @@
     @endif
 </form>
 <div class="table-wrap">
-<table>
-    <thead><tr><th>{{ __('Name') }}</th><th>{{ __('Phone') }}</th><th>{{ __('Location') }}</th><th>{{ __('Opening Balance') }}</th><th>{{ __('Status') }}</th><th></th></tr></thead>
+<table id="suppliersTable">
+    <thead><tr><th><button class="table-sort" type="button" data-sort-column="0" data-sort-type="text">{{ __('Name') }} <span aria-hidden="true">--</span></button></th><th><button class="table-sort" type="button" data-sort-column="1" data-sort-type="number">{{ __('Remaining Balance JOD') }} <span aria-hidden="true">--</span></button></th><th><button class="table-sort" type="button" data-sort-column="2" data-sort-type="text">{{ __('Status') }} <span aria-hidden="true">--</span></button></th><th></th></tr></thead>
     <tbody>
     @foreach ($suppliers as $supplier)
         <tr>
-            <td>{{ $supplier->name }}</td>
-            <td>{{ $supplier->phone }}</td>
-            <td>{{ $supplier->location }}</td>
-            <td>{{ number_format($supplier->opening_balance, 3) }}</td>
-            <td>{{ __(ucfirst($supplier->status)) }}</td>
+            <td data-sort-value="{{ $supplier->name }}">{{ $supplier->name }}</td>
+            <td data-sort-value="{{ $supplier->remaining_balance_jod }}" @class(['amount-positive' => $supplier->remaining_balance_jod >= 0, 'amount-negative' => $supplier->remaining_balance_jod < 0])>{{ number_format($supplier->remaining_balance_jod, 3) }}</td>
+            <td data-sort-value="{{ $supplier->status }}">{{ __(ucfirst($supplier->status)) }}</td>
             <td>
                 <a href="{{ route('suppliers.show', $supplier) }}">{{ __('Statement') }}</a>
                 @if (auth()->user()?->canWriteOperationalData())
@@ -36,5 +34,37 @@
     </tbody>
 </table>
 </div>
-{{ $suppliers->links() }}
+<script>
+document.querySelectorAll('#suppliersTable .table-sort').forEach((button) => {
+    button.addEventListener('click', () => {
+        const table = button.closest('table');
+        const tbody = table.querySelector('tbody');
+        const column = Number(button.dataset.sortColumn);
+        const type = button.dataset.sortType;
+        const currentDirection = button.dataset.direction === 'asc' ? 'desc' : 'asc';
+
+        table.querySelectorAll('.table-sort').forEach((sortButton) => {
+            sortButton.dataset.direction = '';
+            sortButton.querySelector('span').textContent = '--';
+        });
+
+        button.dataset.direction = currentDirection;
+        button.querySelector('span').textContent = currentDirection === 'asc' ? 'ASC' : 'DESC';
+
+        [...tbody.querySelectorAll('tr')]
+            .sort((leftRow, rightRow) => {
+                const leftCell = leftRow.children[column];
+                const rightCell = rightRow.children[column];
+                const leftValue = leftCell.dataset.sortValue || leftCell.textContent.trim();
+                const rightValue = rightCell.dataset.sortValue || rightCell.textContent.trim();
+                const result = type === 'number'
+                    ? Number(leftValue) - Number(rightValue)
+                    : leftValue.localeCompare(rightValue, undefined, { sensitivity: 'base' });
+
+                return currentDirection === 'asc' ? result : -result;
+            })
+            .forEach((row) => tbody.appendChild(row));
+    });
+});
+</script>
 @endsection

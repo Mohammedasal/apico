@@ -11,7 +11,7 @@ use Illuminate\Support\Str;
 
 class SupplierController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request, ApicoCalculator $calculator)
     {
         $search = trim((string) $request->input('q', ''));
         $suppliers = Supplier::query()
@@ -24,8 +24,10 @@ class SupplierController extends Controller
                 });
             })
             ->orderBy('name')
-            ->paginate(25)
-            ->withQueryString();
+            ->get();
+        $suppliers->each(function (Supplier $supplier) use ($calculator) {
+            $supplier->setAttribute('remaining_balance_jod', $calculator->supplierBalance($supplier));
+        });
 
         return view('suppliers.index', compact('suppliers', 'search'));
     }

@@ -3,6 +3,14 @@
 @section('content')
 @php $isEdit = $payment->exists; @endphp
 <h1>{{ $isEdit ? __('Edit Supplier Payment') : __('New Supplier Payment') }}</h1>
+@if (! $isEdit && filled($recentPayment))
+    <div class="status" style="margin-bottom:16px">
+        <strong>{{ __('Last added') }}</strong>
+        <span style="margin-inline-start:12px">{{ $recentPayment->date?->toDateString() }}</span>
+        <span> | {{ $recentPayment->supplier?->name }}</span>
+        <span> | {{ number_format((float) $recentPayment->amount, 3) }} JOD</span>
+    </div>
+@endif
 <form method="post" action="{{ $isEdit ? route('supplier-payments.update', $payment) : route('supplier-payments.store') }}">
     @csrf
     @if ($isEdit) @method('put') @endif

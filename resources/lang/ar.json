@@ -659,5 +659,10 @@
     "Recycled Kg": "المعاد تدويره كغم",
     "Recycling Yield": "نسبة إعادة التدوير",
     "No customer": "بدون عميل",
-    "No material": "بدون مادة"
+    "No material": "بدون مادة",
+    "Supplier, reference, bank, notes": "المورد، المرجع، البنك، الملاحظات",
+    "Min Amount": "الحد الأدنى للمبلغ",
+    "Max Amount": "الحد الأعلى للمبلغ",
+    "Delete this transaction?": "هل تريد حذف هذه الحركة؟",
+    "Supplier payment deleted.": "تم حذف دفعة المورد."
 }

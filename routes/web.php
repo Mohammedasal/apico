@@ -76,7 +76,9 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/suppliers/{supplier}/export', [SupplierController::class, 'export'])->middleware('role:admin,accountant,viewer')->name('suppliers.export');
     Route::resource('suppliers', SupplierController::class)->only(['index', 'show']);
     Route::resource('supplier-payments', SupplierPaymentController::class)->only(['index']);
+    Route::get('/supplier-payments-export', [SupplierPaymentController::class, 'export'])->middleware('role:admin,accountant,viewer')->name('supplier-payments.export');
     Route::resource('supplier-payments', SupplierPaymentController::class)->only(['create', 'store', 'edit', 'update'])->middleware('role:admin,data_entry');
+    Route::delete('/supplier-payments/{supplierPayment}', [SupplierPaymentController::class, 'destroy'])->middleware('role:admin')->name('supplier-payments.destroy');
 
     Route::prefix('{module}')
         ->whereIn('module', ['recycle-in', 'recycle-out', 'payments', 'stock-purchases', 'stock-sales'])
