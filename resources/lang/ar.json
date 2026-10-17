@@ -686,5 +686,19 @@
     "Assets": "الأصول",
     "Liabilities": "الالتزامات",
     "Current Earnings": "أرباح الفترة",
-    "Balance": "الرصيد"
+    "Balance": "الرصيد",
+    "AR Aging": "أعمار ذمم العملاء",
+    "AP Aging": "أعمار ذمم الموردين",
+    "Cash & Bank": "الصندوق والبنوك",
+    "Payments are allocated to the oldest charges first.": "يتم توزيع الدفعات على أقدم المبالغ المستحقة أولاً.",
+    "Total Balance": "إجمالي الرصيد",
+    "0-30 Days": "0-30 يوماً",
+    "31-60 Days": "31-60 يوماً",
+    "61-90 Days": "61-90 يوماً",
+    "Over 90 Days": "أكثر من 90 يوماً",
+    "Unapplied Credit": "رصيد دائن غير موزع",
+    "No open balances.": "لا توجد أرصدة مفتوحة.",
+    "Balances from posted journal entries.": "الأرصدة من القيود المحاسبية المرحلة.",
+    "Cash": "الصندوق",
+    "Bank": "البنك"
 }

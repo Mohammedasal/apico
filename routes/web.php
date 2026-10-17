@@ -143,6 +143,9 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/reports/general-ledger', [AccountingReportController::class, 'generalLedger'])->name('reports.general-ledger');
         Route::get('/reports/profit-loss', [AccountingReportController::class, 'profitLoss'])->name('reports.profit-loss');
         Route::get('/reports/balance-sheet', [AccountingReportController::class, 'balanceSheet'])->name('reports.balance-sheet');
+        Route::get('/reports/receivables-aging', [AccountingReportController::class, 'receivablesAging'])->name('reports.receivables-aging');
+        Route::get('/reports/payables-aging', [AccountingReportController::class, 'payablesAging'])->name('reports.payables-aging');
+        Route::get('/reports/cash-bank', [AccountingReportController::class, 'cashBank'])->name('reports.cash-bank');
     });
 
     Route::prefix('accounting')->name('accounting.')->middleware('role:admin')->group(function () {

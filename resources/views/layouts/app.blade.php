@@ -24,6 +24,9 @@
             request()->routeIs('accounting.reports.general-ledger*') => 'General Ledger',
             request()->routeIs('accounting.reports.profit-loss*') => 'Accounting P&L',
             request()->routeIs('accounting.reports.balance-sheet*') => 'Balance Sheet',
+            request()->routeIs('accounting.reports.receivables-aging*') => 'AR Aging',
+            request()->routeIs('accounting.reports.payables-aging*') => 'AP Aging',
+            request()->routeIs('accounting.reports.cash-bank*') => 'Cash & Bank',
             request()->routeIs('accounting.expenses.*') => 'Expense Vouchers',
             request()->routeIs('accounting.expense-categories.*') => 'Expense Categories',
             request()->routeIs('accounting.employees.*') => 'Employees',
@@ -231,6 +234,9 @@
             <a @class(['active' => request()->routeIs('accounting.reports.general-ledger*')]) href="{{ route('accounting.reports.general-ledger') }}">{{ __('General Ledger') }}</a>
             <a @class(['active' => request()->routeIs('accounting.reports.profit-loss*')]) href="{{ route('accounting.reports.profit-loss') }}">{{ __('Accounting P&L') }}</a>
             <a @class(['active' => request()->routeIs('accounting.reports.balance-sheet*')]) href="{{ route('accounting.reports.balance-sheet') }}">{{ __('Balance Sheet') }}</a>
+            <a @class(['active' => request()->routeIs('accounting.reports.receivables-aging*')]) href="{{ route('accounting.reports.receivables-aging') }}">{{ __('AR Aging') }}</a>
+            <a @class(['active' => request()->routeIs('accounting.reports.payables-aging*')]) href="{{ route('accounting.reports.payables-aging') }}">{{ __('AP Aging') }}</a>
+            <a @class(['active' => request()->routeIs('accounting.reports.cash-bank*')]) href="{{ route('accounting.reports.cash-bank') }}">{{ __('Cash & Bank') }}</a>
             <a @class(['active' => request()->routeIs('accounting.expenses.*')]) href="{{ route('accounting.expenses.index') }}">{{ __('Expenses') }}</a>
             <a @class(['active' => request()->routeIs('accounting.expense-categories.*')]) href="{{ route('accounting.expense-categories.index') }}">{{ __('Expense Categories') }}</a>
             <a @class(['active' => request()->routeIs('accounting.salary-advances.*')]) href="{{ route('accounting.salary-advances.index') }}">{{ __('Salary Advances') }}</a>

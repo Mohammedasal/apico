@@ -2,9 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\BankAccount;
+use App\Models\CashAccount;
 use App\Models\ChartOfAccount;
 use App\Models\JournalEntry;
 use App\Models\JournalEntryLine;
+use App\Services\AgingReportService;
 use App\Services\SimpleXlsxExporter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -12,6 +15,43 @@ use Illuminate\Validation\Rule;
 
 class AccountingReportController extends Controller
 {
+    public function receivablesAging(Request $request, AgingReportService $aging)
+    {
+        return $this->agingReport($request, $aging->customers($this->asOf($request)), 'receivables');
+    }
+
+    public function payablesAging(Request $request, AgingReportService $aging)
+    {
+        return $this->agingReport($request, $aging->suppliers($this->asOf($request)), 'payables');
+    }
+
+    public function cashBank(Request $request)
+    {
+        $to = $this->asOf($request);
+        $balance = function (int $accountId) use ($to): float {
+            return round((float) JournalEntryLine::query()
+                ->join('journal_entries', 'journal_entries.id', '=', 'journal_entry_lines.journal_entry_id')
+                ->whereIn('journal_entries.status', ['posted', 'reversed'])
+                ->whereDate('journal_entries.entry_date', '<=', $to)
+                ->where('journal_entry_lines.account_id', $accountId)
+                ->selectRaw('COALESCE(SUM(journal_entry_lines.debit - journal_entry_lines.credit), 0) AS balance')
+                ->value('balance'), 3);
+        };
+        $cashAccounts = CashAccount::with('chartAccount')->orderBy('name_en')->get()
+            ->map(fn (CashAccount $account) => ['name' => $account->localized_name, 'type' => 'cash', 'balance' => $balance($account->chart_account_id)]);
+        $bankAccounts = BankAccount::with('chartAccount')->orderBy('name_en')->get()
+            ->map(fn (BankAccount $account) => ['name' => $account->localized_name, 'type' => 'bank', 'balance' => $balance($account->chart_account_id)]);
+        $rows = $cashAccounts->merge($bankAccounts)->values();
+
+        return view('accounting.reports.cash-bank', [
+            'to' => $to,
+            'rows' => $rows,
+            'cashTotal' => round((float) $cashAccounts->sum('balance'), 3),
+            'bankTotal' => round((float) $bankAccounts->sum('balance'), 3),
+            'total' => round((float) $rows->sum('balance'), 3),
+        ]);
+    }
+
     public function generalLedger(Request $request)
     {
         $validated = $request->validate([
@@ -299,5 +339,29 @@ class AccountingReportController extends Controller
             })
             ->filter(fn (array $row) => abs($row['amount']) >= 0.0005)
             ->values();
+    }
+
+    private function asOf(Request $request): string
+    {
+        $request->validate(['to' => ['nullable', 'date']]);
+
+        return $request->input('to', now()->toDateString());
+    }
+
+    private function agingReport(Request $request, Collection $rows, string $type)
+    {
+        $search = trim((string) $request->input('q', ''));
+        $rows = $rows->when($search !== '', fn (Collection $rows) => $rows->filter(
+            fn (array $row) => str_contains(mb_strtolower($row['name']), mb_strtolower($search))
+        ))->values();
+
+        return view('accounting.reports.aging', [
+            'type' => $type,
+            'to' => $this->asOf($request),
+            'search' => $search,
+            'rows' => $rows,
+            'totals' => collect(['current', 'days_31_60', 'days_61_90', 'over_90', 'unapplied_credit', 'balance'])
+                ->mapWithKeys(fn (string $column) => [$column => round((float) $rows->sum($column), 3)])->all(),
+        ]);
     }
 }
