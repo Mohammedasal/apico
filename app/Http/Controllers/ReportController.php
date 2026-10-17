@@ -10,6 +10,7 @@ use App\Models\RecycleOut;
 use App\Models\StockSale;
 use App\Services\ApicoCalculator;
 use App\Services\SimpleXlsxExporter;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 
@@ -19,7 +20,7 @@ class ReportController extends Controller
     {
         $year = (int) $request->input('year', now()->year);
         $fromMonth = max(1, min(12, (int) $request->input('from_month', 1)));
-        $toMonth = max($fromMonth, min(12, (int) $request->input('to_month', 12)));
+        $toMonth = max($fromMonth, min(12, (int) $request->input('to_month', $this->defaultReportToMonth($year))));
         $search = trim((string) $request->input('q', ''));
 
         $months = $this->monthlyRows($year, $fromMonth, $toMonth, $calculator)
@@ -35,7 +36,7 @@ class ReportController extends Controller
     {
         $year = (int) $request->input('year', now()->year);
         $fromMonth = max(1, min(12, (int) $request->input('from_month', 1)));
-        $toMonth = max($fromMonth, min(12, (int) $request->input('to_month', 12)));
+        $toMonth = max($fromMonth, min(12, (int) $request->input('to_month', $this->defaultReportToMonth($year))));
         $search = trim((string) $request->input('q', ''));
         $columns = $this->selectedColumns($this->monthlyColumns(), $request);
         $rows = $this->monthlyRows($year, $fromMonth, $toMonth, $calculator)
@@ -51,29 +52,44 @@ class ReportController extends Controller
 
     private function monthlyRows(int $year, int $fromMonth, int $toMonth, ApicoCalculator $calculator): Collection
     {
-        return collect(range($fromMonth, $toMonth))->map(function (int $month) use ($year, $calculator) {
-            $from = sprintf('%d-%02d-01', $year, $month);
-            $to = date('Y-m-t', strtotime($from));
+        $lastCompletedMonth = now()->startOfMonth()->subMonth();
 
-            $dateRange = fn ($query) => $query->whereDate('date', '>=', $from)->whereDate('date', '<=', $to);
-            $recycleOutKg = RecycleOut::query()->tap($dateRange)->sum('weight_kg');
-            $wasteKg = RecycleOut::query()->tap($dateRange)->sum('waste_kg');
+        return collect(range($fromMonth, $toMonth))
+            ->filter(fn (int $month) => Carbon::create($year, $month, 1)->lte($lastCompletedMonth))
+            ->map(function (int $month) use ($year, $calculator) {
+                $from = sprintf('%d-%02d-01', $year, $month);
+                $to = date('Y-m-t', strtotime($from));
 
-            return [
-                'month' => date('M Y', strtotime($from)),
-                'recycle_in_kg' => RecycleIn::query()->tap($dateRange)->sum('weight_kg'),
-                'recycle_out_kg' => $recycleOutKg,
-                'recycled_out_kg' => RecycleOut::query()->tap($dateRange)->sum('recycled_out_kg'),
-                'waste_kg' => $wasteKg,
-                'waste_percentage' => $recycleOutKg > 0 ? round(((float) $wasteKg / (float) $recycleOutKg) * 100, 2) : 0,
-                'non_recycled_kg' => RecycleOut::query()->tap($dateRange)->sum('non_recycled_kg'),
-                'payments' => Payment::query()->tap($dateRange)->sum('amount'),
-                'stock_sales' => StockSale::query()->tap($dateRange)->sum('sales_value'),
-                'stock_profit' => $calculator->stockProfitSummary($from, $to)['profit'],
-                'actual_cost_per_ton' => $calculator->actualCostPerTonForPeriod($from, $to),
-                'actual_profit_loss' => $calculator->actualProfitSummary($from, $to)['actual_profit_loss'],
-            ];
-        });
+                $dateRange = fn ($query) => $query->whereDate('date', '>=', $from)->whereDate('date', '<=', $to);
+                $recycleOutKg = RecycleOut::query()->tap($dateRange)->sum('weight_kg');
+                $wasteKg = RecycleOut::query()->tap($dateRange)->sum('waste_kg');
+
+                return [
+                    'month' => date('M Y', strtotime($from)),
+                    'recycle_in_kg' => RecycleIn::query()->tap($dateRange)->sum('weight_kg'),
+                    'recycle_out_kg' => $recycleOutKg,
+                    'recycled_out_kg' => RecycleOut::query()->tap($dateRange)->sum('recycled_out_kg'),
+                    'waste_kg' => $wasteKg,
+                    'waste_percentage' => $recycleOutKg > 0 ? round(((float) $wasteKg / (float) $recycleOutKg) * 100, 2) : 0,
+                    'non_recycled_kg' => RecycleOut::query()->tap($dateRange)->sum('non_recycled_kg'),
+                    'payments' => Payment::query()->tap($dateRange)->sum('amount'),
+                    'stock_sales' => StockSale::query()->tap($dateRange)->sum('sales_value'),
+                    'stock_profit' => $calculator->stockProfitSummary($from, $to)['profit'],
+                    'actual_cost_per_ton' => $calculator->actualCostPerTonForPeriod($from, $to),
+                    'actual_profit_loss' => $calculator->actualProfitSummary($from, $to)['actual_profit_loss'],
+                ];
+            });
+    }
+
+    private function defaultReportToMonth(int $year): int
+    {
+        $lastCompletedMonth = now()->startOfMonth()->subMonth();
+
+        if ($year < $lastCompletedMonth->year) {
+            return 12;
+        }
+
+        return $year === $lastCompletedMonth->year ? $lastCompletedMonth->month : 1;
     }
 
     public function customerStatement(Customer $customer, Request $request, ApicoCalculator $calculator)

@@ -258,6 +258,7 @@ class ApicoCalculator
             'stock_revenue' => $stock['revenue'],
             'stock_material_cogs' => $stock['material_cogs'],
             'operating_expenses' => round($operatingExpenses, 3),
+            'expense_basis' => $this->expenseBasis($from, $to),
             'actual_cost_per_ton' => $this->actualCostPerTonForPeriod($from, $to),
             'actual_profit_loss' => round($recycleIncome + $stock['revenue'] - $stock['material_cogs'] - $operatingExpenses, 3),
         ];
@@ -265,8 +266,8 @@ class ApicoCalculator
 
     public function operatingExpenses(?string $from = null, ?string $to = null): float
     {
-        $start = $from ? Carbon::parse($from)->startOfMonth() : $this->firstActivityDate()?->startOfMonth();
-        $end = $to ? Carbon::parse($to)->startOfMonth() : $this->lastActivityDate()?->startOfMonth();
+        $start = $from ? Carbon::parse($from)->startOfDay() : $this->firstActivityDate()?->startOfDay();
+        $end = $to ? Carbon::parse($to)->startOfDay() : $this->lastActivityDate()?->startOfDay();
 
         if (! $start || ! $end || $end->lt($start)) {
             return 0;
@@ -281,7 +282,34 @@ class ApicoCalculator
                     ->orWhere(fn ($query) => $query->where('year', $end->year)->where('month', '<=', $end->month));
             })
             ->get()
-            ->sum(fn (MonthlyExpense $expense) => $expense->total_expenses);
+            ->sum(function (MonthlyExpense $expense) use ($start, $end) {
+                $monthStart = Carbon::create($expense->year, $expense->month, 1)->startOfDay();
+                $monthEnd = $monthStart->copy()->endOfMonth()->startOfDay();
+                $overlapStart = $start->copy()->max($monthStart);
+                $overlapEnd = $end->copy()->min($monthEnd);
+
+                if ($overlapEnd->lt($overlapStart)) {
+                    return 0;
+                }
+
+                $coveredDays = $overlapStart->diffInDays($overlapEnd) + 1;
+
+                return $expense->total_expenses * ($coveredDays / $monthStart->daysInMonth);
+            });
+    }
+
+    private function expenseBasis(?string $from, ?string $to): string
+    {
+        if (! $from || ! $to) {
+            return 'activity_period_prorated';
+        }
+
+        $start = Carbon::parse($from);
+        $end = Carbon::parse($to);
+
+        return $start->isStartOfMonth() && $end->isSameDay($end->copy()->endOfMonth())
+            ? 'completed_months'
+            : 'calendar_day_proration';
     }
 
     public function stockMaterialCogs(?string $from = null, ?string $to = null): float

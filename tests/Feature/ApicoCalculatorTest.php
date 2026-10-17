@@ -192,6 +192,18 @@ class ApicoCalculatorTest extends TestCase
         $this->assertSame(400.0, $summary['actual_profit_loss']);
     }
 
+    public function test_partial_month_profit_prorates_monthly_expenses_and_labels_the_basis(): void
+    {
+        $calculator = app(ApicoCalculator::class);
+        MonthlyExpense::create(['year' => 2026, 'month' => 4, 'rent' => 300]);
+
+        $summary = $calculator->actualProfitSummary('2026-04-01', '2026-04-15');
+
+        $this->assertSame(150.0, $summary['operating_expenses']);
+        $this->assertSame(-150.0, $summary['actual_profit_loss']);
+        $this->assertSame('calendar_day_proration', $summary['expense_basis']);
+    }
+
     public function test_supplier_statement_tracks_purchases_payments_and_running_balance(): void
     {
         $calculator = app(ApicoCalculator::class);

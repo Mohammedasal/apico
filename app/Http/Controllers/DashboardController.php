@@ -16,8 +16,9 @@ class DashboardController extends Controller
 {
     public function __invoke(Request $request, ApicoCalculator $calculator)
     {
-        $from = $request->input('from');
-        $to = $request->input('to');
+        $lastCompletedDay = Carbon::today()->startOfMonth()->subDay();
+        $from = $request->input('from', $lastCompletedDay->copy()->startOfYear()->toDateString());
+        $to = $request->input('to', $lastCompletedDay->toDateString());
         $dateRange = fn ($query) => $query
             ->when($from, fn ($query) => $query->whereDate('date', '>=', $from))
             ->when($to, fn ($query) => $query->whereDate('date', '<=', $to));
@@ -81,7 +82,16 @@ class DashboardController extends Controller
 
     private function monthlyPerformance(ApicoCalculator $calculator, int $year): array
     {
-        return collect(range(1, 12))
+        $lastCompletedMonth = Carbon::today()->startOfMonth()->subMonth();
+        $lastMonth = $year < $lastCompletedMonth->year
+            ? 12
+            : ($year === $lastCompletedMonth->year ? $lastCompletedMonth->month : 0);
+
+        if ($lastMonth === 0) {
+            return [];
+        }
+
+        return collect(range(1, $lastMonth))
             ->map(function (int $month) use ($calculator, $year) {
                 $start = Carbon::create($year, $month, 1);
                 $end = $start->copy()->endOfMonth();

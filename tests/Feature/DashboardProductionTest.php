@@ -46,4 +46,21 @@ class DashboardProductionTest extends TestCase
         $this->assertSame(2, $response->viewData('productionDays'));
         $this->assertSame(3500.0, $response->viewData('dailyProductionAverage'));
     }
+
+    public function test_dashboard_defaults_to_the_last_completed_month_and_hides_future_performance(): void
+    {
+        $this->travelTo('2026-10-17 12:00:00');
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+
+        ProductionDay::create(['date' => '2026-09-30', 'shift_one_kg' => 1000, 'shift_two_kg' => 0]);
+        ProductionDay::create(['date' => '2026-10-01', 'shift_one_kg' => 9000, 'shift_two_kg' => 0]);
+
+        $response = $this->actingAs($admin)->get(route('dashboard'));
+
+        $response->assertOk();
+        $this->assertSame('2026-01-01', $response->viewData('from'));
+        $this->assertSame('2026-09-30', $response->viewData('to'));
+        $this->assertSame(1000.0, $response->viewData('productionKg'));
+        $this->assertCount(9, $response->viewData('monthlyPerformance'));
+    }
 }
