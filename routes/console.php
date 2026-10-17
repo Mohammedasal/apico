@@ -1,7 +1,7 @@
 <?php
 
-use App\Models\Customer;
 use App\Models\ChequeOut;
+use App\Models\Customer;
 use App\Models\MonthlyExpense;
 use App\Models\Payment;
 use App\Models\ProductionDay;
@@ -14,6 +14,12 @@ use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Schedule;
+
+Schedule::command('apico:cheque-due-check')
+    ->dailyAt('07:00')
+    ->timezone('Asia/Amman')
+    ->withoutOverlapping();
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
@@ -80,7 +86,7 @@ Artisan::command('apico:import-production {path} {--year=2026}', function () {
         return self::FAILURE;
     }
 
-    $zip = new ZipArchive();
+    $zip = new ZipArchive;
     $zip->open($path);
     $xml = fn (string $name) => simplexml_load_string($zip->getFromName($name));
     $workbook = $xml('xl/workbook.xml');
@@ -108,6 +114,7 @@ Artisan::command('apico:import-production {path} {--year=2026}', function () {
                 $rows[$rowNumber][$column] = isset($cell->v) ? (string) $cell->v : null;
             }
         }
+
         return $rows;
     };
 

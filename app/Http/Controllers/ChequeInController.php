@@ -6,24 +6,32 @@ use App\Models\BankAccount;
 use App\Models\Payment;
 use App\Services\AccountingPostingService;
 use App\Services\AuditService;
+use App\Services\ChequeDueService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class ChequeInController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request, ChequeDueService $dueService)
     {
         $status = $request->input('status');
 
+        $cheques = Payment::with(['customer', 'creator', 'editor', 'chequeBankAccount'])
+            ->where('payment_type', 'cheque')
+            ->when($status, fn ($query) => $query->where('cheque_status', $status))
+            ->orderBy('cheque_due_date')
+            ->orderBy('date')
+            ->paginate(50);
+        $cheques->getCollection()->each(fn (Payment $payment) => $payment->setAttribute(
+            'due_state',
+            $dueService->state($payment->cheque_due_date, $payment->cheque_status)
+        ));
+
         return view('cheques.in', [
             'status' => $status,
+            'dueSummary' => $dueService->summary()['incoming'],
             'bankAccounts' => BankAccount::where('is_active', true)->orderByDesc('is_default')->orderBy('name_en')->get(),
-            'cheques' => Payment::with(['customer', 'creator', 'editor', 'chequeBankAccount'])
-                ->where('payment_type', 'cheque')
-                ->when($status, fn ($query) => $query->where('cheque_status', $status))
-                ->orderBy('cheque_due_date')
-                ->orderBy('date')
-                ->paginate(50),
+            'cheques' => $cheques,
         ]);
     }
 

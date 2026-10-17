@@ -8,14 +8,15 @@ use App\Models\ExpenseVoucher;
 use App\Models\SupplierPayment;
 use App\Services\AccountingPostingService;
 use App\Services\AuditService;
+use App\Services\ChequeDueService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class ChequeOutController extends Controller
 {
-    public function index()
+    public function index(ChequeDueService $dueService)
     {
-        return view('cheques.out', $this->viewData());
+        return view('cheques.out', $this->viewData(dueService: $dueService));
     }
 
     public function store(Request $request)
@@ -25,9 +26,9 @@ class ChequeOutController extends Controller
         return redirect()->route('cheques-out.index')->with('status', __('Outgoing cheque saved.'));
     }
 
-    public function edit(ChequeOut $chequeOut)
+    public function edit(ChequeOut $chequeOut, ChequeDueService $dueService)
     {
-        return view('cheques.out', $this->viewData($chequeOut));
+        return view('cheques.out', $this->viewData($chequeOut, $dueService));
     }
 
     public function update(Request $request, ChequeOut $chequeOut)
@@ -89,14 +90,24 @@ class ChequeOutController extends Controller
         return back()->with('status', __('Expense cheque status updated.'));
     }
 
-    private function viewData(?ChequeOut $record = null): array
+    private function viewData(?ChequeOut $record = null, ?ChequeDueService $dueService = null): array
     {
+        $dueService ??= app(ChequeDueService::class);
+        $cheques = ChequeOut::with(['creator', 'editor'])->orderBy('due_date')->orderBy('id')->paginate(50);
+        $supplierCheques = SupplierPayment::with(['supplier', 'creator', 'editor', 'chequeBankAccount'])
+            ->where('payment_type', 'cheque')->orderBy('cheque_due_date')->orderBy('date')->get();
+        $expenseCheques = ExpenseVoucher::with(['category', 'creator', 'editor', 'chequeBankAccount'])
+            ->where('payment_type', 'cheque')->where('status', 'posted')->orderBy('cheque_due_date')->orderBy('expense_date')->get();
+
+        $cheques->getCollection()->each(fn (ChequeOut $cheque) => $cheque->setAttribute('due_state', $dueService->state($cheque->due_date, $cheque->status)));
+        $supplierCheques->each(fn (SupplierPayment $payment) => $payment->setAttribute('due_state', $dueService->state($payment->cheque_due_date, $payment->cheque_status)));
+        $expenseCheques->each(fn (ExpenseVoucher $expense) => $expense->setAttribute('due_state', $dueService->state($expense->cheque_due_date, $expense->cheque_status)));
+
         return [
-            'cheques' => ChequeOut::with(['creator', 'editor'])->orderBy('due_date')->orderBy('id')->paginate(50),
-            'supplierCheques' => SupplierPayment::with(['supplier', 'creator', 'editor', 'chequeBankAccount'])
-                ->where('payment_type', 'cheque')->orderBy('cheque_due_date')->orderBy('date')->get(),
-            'expenseCheques' => ExpenseVoucher::with(['category', 'creator', 'editor', 'chequeBankAccount'])
-                ->where('payment_type', 'cheque')->where('status', 'posted')->orderBy('cheque_due_date')->orderBy('expense_date')->get(),
+            'cheques' => $cheques,
+            'supplierCheques' => $supplierCheques,
+            'expenseCheques' => $expenseCheques,
+            'dueSummary' => $dueService->summary()['outgoing'],
             'bankAccounts' => BankAccount::where('is_active', true)->orderByDesc('is_default')->orderBy('name_en')->get(),
             'record' => $record,
         ];

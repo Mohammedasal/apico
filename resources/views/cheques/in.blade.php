@@ -11,6 +11,11 @@
         <div><button>{{ __('Filter') }}</button></div>
     </form>
 </div>
+<div class="grid" style="margin-bottom:16px">
+    <div class="card kpi-card"><div class="muted">{{ __('Overdue') }}</div><div class="kpi amount-negative">{{ $dueSummary['overdue'] }}</div></div>
+    <div class="card kpi-card"><div class="muted">{{ __('Due Today') }}</div><div class="kpi">{{ $dueSummary['due_today'] }}</div></div>
+    <div class="card kpi-card"><div class="muted">{{ __('Upcoming 7 Days') }}</div><div class="kpi">{{ $dueSummary['upcoming'] }}</div></div>
+</div>
 
 <div class="table-wrap">
     <table>
@@ -24,7 +29,7 @@
                 <td>{{ number_format($payment->amount, 3) }}</td>
                 <td>{{ $payment->bank_name }}</td>
                 <td>{{ $payment->reference_no }}</td>
-                <td>{{ __(ucfirst($payment->cheque_status ?? 'pending')) }}</td>
+                <td>{{ __(ucfirst($payment->cheque_status ?? 'pending')) }}<div class="muted">{{ __(str($payment->due_state)->replace('_', ' ')->title()->toString()) }}</div></td>
                 <td><div>{{ $payment->cheque_settlement_date?->toDateString() ?? '-' }}</div><div class="muted">{{ $payment->chequeBankAccount?->localized_name ?? '-' }}</div></td>
                 <td>{{ $payment->notes }}</td>
                 <td>
@@ -36,7 +41,7 @@
                     @endif
                 </td>
                 <td>
-                    @if (auth()->user()?->canWriteOperationalData() || auth()->user()?->canManageAccounting())
+                    @if (auth()->user()?->canManageAccounting())
                         <form method="post" action="{{ route('cheques-in.update', $payment) }}" class="filters" style="padding:0;border:0;background:transparent;grid-template-columns:minmax(110px,1fr) minmax(135px,1fr) minmax(150px,1.3fr) auto;min-width:560px">
                             @csrf
                             @method('put')

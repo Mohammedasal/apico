@@ -8,6 +8,11 @@
         <div class="muted">{{ __('Outgoing cheques to monitor due dates and bank balance needs.') }}</div>
     </div>
 </div>
+<div class="grid" style="margin-bottom:16px">
+    <div class="card kpi-card"><div class="muted">{{ __('Overdue') }}</div><div class="kpi amount-negative">{{ $dueSummary['overdue'] }}</div></div>
+    <div class="card kpi-card"><div class="muted">{{ __('Due Today') }}</div><div class="kpi">{{ $dueSummary['due_today'] }}</div></div>
+    <div class="card kpi-card"><div class="muted">{{ __('Upcoming 7 Days') }}</div><div class="kpi">{{ $dueSummary['upcoming'] }}</div></div>
+</div>
 
 @if (auth()->user()?->canWriteOperationalData())
 <form method="post" action="{{ $isEdit ? route('cheques-out.update', $record) : route('cheques-out.store') }}">
@@ -39,7 +44,7 @@
                 <td>{{ $cheque->bank_name }}</td>
                 <td>{{ $cheque->cheque_number }}</td>
                 <td>{{ number_format($cheque->amount, 3) }}</td>
-                <td>{{ __(ucfirst($cheque->status)) }}</td>
+                <td>{{ __(ucfirst($cheque->status)) }}<div class="muted">{{ __(str($cheque->due_state)->replace('_', ' ')->title()->toString()) }}</div></td>
                 <td>{{ $cheque->notes }}</td>
                 <td>
                     <div>{{ __('Created') }} {{ $cheque->created_at?->format('Y-m-d H:i') }}</div>
@@ -72,7 +77,7 @@
                 <td>{{ $payment->bank_name }}</td>
                 <td>{{ $payment->reference_no }}</td>
                 <td>{{ number_format($payment->amount, 3) }}</td>
-                <td>{{ __(ucfirst($payment->cheque_status ?? 'pending')) }}</td>
+                <td>{{ __(ucfirst($payment->cheque_status ?? 'pending')) }}<div class="muted">{{ __(str($payment->due_state)->replace('_', ' ')->title()->toString()) }}</div></td>
                 <td><div>{{ $payment->cheque_settlement_date?->toDateString() ?? '-' }}</div><div class="muted">{{ $payment->chequeBankAccount?->localized_name ?? '-' }}</div></td>
                 <td>{{ $payment->notes }}</td>
                 <td>
@@ -84,6 +89,7 @@
                     @endif
                 </td>
                 <td>
+                    @if (auth()->user()?->canManageAccounting())
                     <form method="post" action="{{ route('cheques-out.supplier.update', $payment) }}" class="filters" style="padding:0;border:0;background:transparent;grid-template-columns:minmax(105px,1fr) minmax(135px,1fr) minmax(150px,1.3fr) auto;min-width:550px">
                         @csrf @method('put')
                         <select name="cheque_status"><option value="pending" @selected($payment->cheque_status === 'pending')>{{ __('Pending') }}</option><option value="cleared" @selected($payment->cheque_status === 'cleared')>{{ __('Cleared') }}</option><option value="cancelled" @selected($payment->cheque_status === 'cancelled')>{{ __('Cancelled') }}</option></select>
@@ -91,6 +97,7 @@
                         <select class="searchable-select" name="cheque_bank_account_id" title="{{ __('Settlement Bank') }}"><option value="">{{ __('Select Bank') }}</option>@foreach ($bankAccounts as $account)<option value="{{ $account->id }}" @selected($payment->cheque_bank_account_id === $account->id)>{{ $account->localized_name }}</option>@endforeach</select>
                         <button>{{ __('Save') }}</button>
                     </form>
+                    @endif
                     @if ($payment->cheque_status === 'pending' && auth()->user()?->canWriteOperationalData())<a href="{{ route('supplier-payments.edit', $payment) }}">{{ __('Edit Payment') }}</a>@endif
                 </td>
             </tr>
@@ -114,9 +121,10 @@
                 <td>{{ $expense->expense_date->toDateString() }}</td>
                 <td>{{ $expense->reference }}</td>
                 <td>{{ number_format($expense->paid_amount, 3) }}</td>
-                <td>{{ __(ucfirst($expense->cheque_status ?? 'pending')) }}</td>
+                <td>{{ __(ucfirst($expense->cheque_status ?? 'pending')) }}<div class="muted">{{ __(str($expense->due_state)->replace('_', ' ')->title()->toString()) }}</div></td>
                 <td><div>{{ $expense->cheque_settlement_date?->toDateString() ?? '-' }}</div><div class="muted">{{ $expense->chequeBankAccount?->localized_name ?? '-' }}</div></td>
                 <td>
+                    @if (auth()->user()?->canManageAccounting())
                     <form method="post" action="{{ route('cheques-out.expense.update', $expense) }}" class="filters" style="padding:0;border:0;background:transparent;grid-template-columns:minmax(105px,1fr) minmax(135px,1fr) minmax(150px,1.3fr) auto;min-width:550px">
                         @csrf @method('put')
                         <select name="cheque_status"><option value="pending" @selected($expense->cheque_status === 'pending')>{{ __('Pending') }}</option><option value="cleared" @selected($expense->cheque_status === 'cleared')>{{ __('Cleared') }}</option><option value="cancelled" @selected($expense->cheque_status === 'cancelled')>{{ __('Cancelled') }}</option></select>
@@ -124,6 +132,7 @@
                         <select class="searchable-select" name="cheque_bank_account_id" title="{{ __('Settlement Bank') }}"><option value="">{{ __('Select Bank') }}</option>@foreach ($bankAccounts as $account)<option value="{{ $account->id }}" @selected($expense->cheque_bank_account_id === $account->id)>{{ $account->localized_name }}</option>@endforeach</select>
                         <button>{{ __('Save') }}</button>
                     </form>
+                    @endif
                 </td>
             </tr>
         @empty

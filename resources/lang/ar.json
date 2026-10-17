@@ -664,5 +664,12 @@
     "Min Amount": "الحد الأدنى للمبلغ",
     "Max Amount": "الحد الأعلى للمبلغ",
     "Delete this transaction?": "هل تريد حذف هذه الحركة؟",
-    "Supplier payment deleted.": "تم حذف دفعة المورد."
+    "Supplier payment deleted.": "تم حذف دفعة المورد.",
+    "Overdue": "متأخر",
+    "Due Today": "مستحق اليوم",
+    "Upcoming 7 Days": "مستحق خلال 7 أيام",
+    "Upcoming": "قريب الاستحقاق",
+    "Scheduled": "مجدول",
+    "No Due Date": "بدون تاريخ استحقاق",
+    "Settled": "تمت التسوية"
 }
