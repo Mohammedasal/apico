@@ -141,11 +141,17 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/reports/trial-balance', [AccountingReportController::class, 'trialBalance'])->name('reports.trial-balance');
         Route::get('/reports/trial-balance/export', [AccountingReportController::class, 'trialBalanceExport'])->name('reports.trial-balance.export');
         Route::get('/reports/general-ledger', [AccountingReportController::class, 'generalLedger'])->name('reports.general-ledger');
+        Route::get('/reports/general-ledger/export', [AccountingReportController::class, 'generalLedgerExport'])->name('reports.general-ledger.export');
         Route::get('/reports/profit-loss', [AccountingReportController::class, 'profitLoss'])->name('reports.profit-loss');
+        Route::get('/reports/profit-loss/export', [AccountingReportController::class, 'profitLossExport'])->name('reports.profit-loss.export');
         Route::get('/reports/balance-sheet', [AccountingReportController::class, 'balanceSheet'])->name('reports.balance-sheet');
+        Route::get('/reports/balance-sheet/export', [AccountingReportController::class, 'balanceSheetExport'])->name('reports.balance-sheet.export');
         Route::get('/reports/receivables-aging', [AccountingReportController::class, 'receivablesAging'])->name('reports.receivables-aging');
+        Route::get('/reports/receivables-aging/export', [AccountingReportController::class, 'receivablesAgingExport'])->name('reports.receivables-aging.export');
         Route::get('/reports/payables-aging', [AccountingReportController::class, 'payablesAging'])->name('reports.payables-aging');
+        Route::get('/reports/payables-aging/export', [AccountingReportController::class, 'payablesAgingExport'])->name('reports.payables-aging.export');
         Route::get('/reports/cash-bank', [AccountingReportController::class, 'cashBank'])->name('reports.cash-bank');
+        Route::get('/reports/cash-bank/export', [AccountingReportController::class, 'cashBankExport'])->name('reports.cash-bank.export');
     });
 
     Route::prefix('accounting')->name('accounting.')->middleware('role:admin')->group(function () {

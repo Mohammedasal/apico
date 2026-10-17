@@ -20,12 +20,42 @@ class AccountingReportController extends Controller
         return $this->agingReport($request, $aging->customers($this->asOf($request)), 'receivables');
     }
 
+    public function receivablesAgingExport(Request $request, AgingReportService $aging, SimpleXlsxExporter $exporter)
+    {
+        return $this->agingExport($request, $aging->customers($this->asOf($request)), 'receivables', $exporter);
+    }
+
     public function payablesAging(Request $request, AgingReportService $aging)
     {
         return $this->agingReport($request, $aging->suppliers($this->asOf($request)), 'payables');
     }
 
+    public function payablesAgingExport(Request $request, AgingReportService $aging, SimpleXlsxExporter $exporter)
+    {
+        return $this->agingExport($request, $aging->suppliers($this->asOf($request)), 'payables', $exporter);
+    }
+
     public function cashBank(Request $request)
+    {
+        return view('accounting.reports.cash-bank', $this->cashBankData($request) + [
+            'exportColumns' => $this->cashBankColumns(),
+        ]);
+    }
+
+    public function cashBankExport(Request $request, SimpleXlsxExporter $exporter)
+    {
+        $report = $this->cashBankData($request);
+        $columns = $this->selectedColumns($request, $this->cashBankColumns());
+
+        return $exporter->download(
+            'cash-bank-'.$report['to'].'.xlsx',
+            array_values($columns),
+            $this->arrayExportRows($report['rows'], $columns),
+            [[__('Cash & Bank'), __('As Of').' '.$report['to']], [__('Generated Date'), now()->toDateString()]]
+        );
+    }
+
+    private function cashBankData(Request $request): array
     {
         $to = $this->asOf($request);
         $balance = function (int $accountId) use ($to): float {
@@ -43,16 +73,53 @@ class AccountingReportController extends Controller
             ->map(fn (BankAccount $account) => ['name' => $account->localized_name, 'type' => 'bank', 'balance' => $balance($account->chart_account_id)]);
         $rows = $cashAccounts->merge($bankAccounts)->values();
 
-        return view('accounting.reports.cash-bank', [
+        return [
             'to' => $to,
             'rows' => $rows,
             'cashTotal' => round((float) $cashAccounts->sum('balance'), 3),
             'bankTotal' => round((float) $bankAccounts->sum('balance'), 3),
             'total' => round((float) $rows->sum('balance'), 3),
-        ]);
+        ];
     }
 
     public function generalLedger(Request $request)
+    {
+        return view('accounting.reports.general-ledger', $this->generalLedgerData($request) + [
+            'exportColumns' => $this->generalLedgerColumns(),
+        ]);
+    }
+
+    public function generalLedgerExport(Request $request, SimpleXlsxExporter $exporter)
+    {
+        $report = $this->generalLedgerData($request);
+        $columns = $this->selectedColumns($request, $this->generalLedgerColumns());
+        $rows = $report['rows']->map(function (array $row) {
+            $line = $row['line'];
+
+            return [
+                'date' => $line->journalEntry->entry_date->toDateString(),
+                'entry_no' => $line->journalEntry->entry_no,
+                'account' => $line->account->code.' - '.$line->account->localized_name,
+                'memo' => app()->getLocale() === 'ar' ? $line->journalEntry->memo_ar : $line->journalEntry->memo_en,
+                'debit' => $line->debit,
+                'credit' => $line->credit,
+                'running_balance' => $row['running_balance'],
+            ];
+        });
+
+        return $exporter->download(
+            'general-ledger-'.$report['filters']['from'].'-to-'.$report['filters']['to'].'.xlsx',
+            array_values($columns),
+            $this->arrayExportRows($rows, $columns),
+            [
+                [__('General Ledger'), $report['filters']['from'].' '.__('to').' '.$report['filters']['to']],
+                [__('Opening Balance'), $this->decimal($report['openingBalance'])],
+                [__('Closing Balance'), $this->decimal($report['closingBalance'])],
+            ]
+        );
+    }
+
+    private function generalLedgerData(Request $request): array
     {
         $validated = $request->validate([
             'from' => ['nullable', 'date'],
@@ -96,7 +163,7 @@ class AccountingReportController extends Controller
                 return ['line' => $line, 'running_balance' => $running];
             });
 
-        return view('accounting.reports.general-ledger', [
+        return [
             'rows' => $lines,
             'accounts' => ChartOfAccount::where('is_posting', true)->orderBy('code')->get(),
             'filters' => ['from' => $from, 'to' => $to, 'account_id' => $accountId, 'q' => $search],
@@ -104,10 +171,36 @@ class AccountingReportController extends Controller
             'periodDebit' => round((float) $lines->sum(fn ($row) => $row['line']->debit), 3),
             'periodCredit' => round((float) $lines->sum(fn ($row) => $row['line']->credit), 3),
             'closingBalance' => $running,
-        ]);
+        ];
     }
 
     public function profitLoss(Request $request)
+    {
+        return view('accounting.reports.profit-loss', $this->profitLossData($request) + [
+            'exportColumns' => $this->accountBalanceColumns(),
+        ]);
+    }
+
+    public function profitLossExport(Request $request, SimpleXlsxExporter $exporter)
+    {
+        $report = $this->profitLossData($request);
+        $columns = $this->selectedColumns($request, $this->accountBalanceColumns());
+
+        return $exporter->download(
+            'accounting-profit-loss-'.$report['from'].'-to-'.$report['to'].'.xlsx',
+            array_values($columns),
+            $this->arrayExportRows($report['rows'], $columns),
+            [
+                [__('Accounting P&L'), $report['from'].' '.__('to').' '.$report['to']],
+                [__('Revenue'), $this->decimal($report['revenue'])],
+                [__('COGS'), $this->decimal($report['cogs'])],
+                [__('Expenses'), $this->decimal($report['expenses'])],
+                [__('Net Profit'), $this->decimal($report['netProfit'])],
+            ]
+        );
+    }
+
+    private function profitLossData(Request $request): array
     {
         [$from, $to] = $this->dateRange($request);
         $rows = $this->accountPeriodBalances($from, $to, ['revenue', 'cogs', 'expense']);
@@ -115,13 +208,40 @@ class AccountingReportController extends Controller
         $cogs = round((float) $rows->where('type', 'cogs')->sum('amount'), 3);
         $expenses = round((float) $rows->where('type', 'expense')->sum('amount'), 3);
 
-        return view('accounting.reports.profit-loss', compact('from', 'to', 'rows', 'revenue', 'cogs', 'expenses') + [
+        return compact('from', 'to', 'rows', 'revenue', 'cogs', 'expenses') + [
             'grossProfit' => round($revenue - $cogs, 3),
             'netProfit' => round($revenue - $cogs - $expenses, 3),
-        ]);
+        ];
     }
 
     public function balanceSheet(Request $request)
+    {
+        return view('accounting.reports.balance-sheet', $this->balanceSheetData($request) + [
+            'exportColumns' => $this->accountBalanceColumns(),
+        ]);
+    }
+
+    public function balanceSheetExport(Request $request, SimpleXlsxExporter $exporter)
+    {
+        $report = $this->balanceSheetData($request);
+        $columns = $this->selectedColumns($request, $this->accountBalanceColumns());
+
+        return $exporter->download(
+            'balance-sheet-'.$report['to'].'.xlsx',
+            array_values($columns),
+            $this->arrayExportRows($report['rows'], $columns),
+            [
+                [__('Balance Sheet'), __('As Of').' '.$report['to']],
+                [__('Assets'), $this->decimal($report['assets'])],
+                [__('Liabilities'), $this->decimal($report['liabilities'])],
+                [__('Equity'), $this->decimal($report['equity'])],
+                [__('Current Earnings'), $this->decimal($report['currentEarnings'])],
+                [__('Balance Difference'), $this->decimal($report['difference'])],
+            ]
+        );
+    }
+
+    private function balanceSheetData(Request $request): array
     {
         $request->validate(['to' => ['nullable', 'date']]);
         $to = $request->input('to', now()->toDateString());
@@ -137,10 +257,10 @@ class AccountingReportController extends Controller
             3
         );
 
-        return view('accounting.reports.balance-sheet', compact('to', 'rows', 'assets', 'liabilities', 'equity', 'currentEarnings') + [
+        return compact('to', 'rows', 'assets', 'liabilities', 'equity', 'currentEarnings') + [
             'liabilitiesAndEquity' => round($liabilities + $equity + $currentEarnings, 3),
             'difference' => round($assets - $liabilities - $equity - $currentEarnings, 3),
-        ]);
+        ];
     }
 
     public function trialBalance(Request $request)
@@ -350,18 +470,122 @@ class AccountingReportController extends Controller
 
     private function agingReport(Request $request, Collection $rows, string $type)
     {
+        $report = $this->agingData($request, $rows, $type);
+
+        return view('accounting.reports.aging', $report + [
+            'exportColumns' => $this->agingColumns($type),
+        ]);
+    }
+
+    private function agingExport(
+        Request $request,
+        Collection $rows,
+        string $type,
+        SimpleXlsxExporter $exporter
+    ) {
+        $report = $this->agingData($request, $rows, $type);
+        $columns = $this->selectedColumns($request, $this->agingColumns($type));
+        $title = $type === 'receivables' ? __('AR Aging') : __('AP Aging');
+
+        return $exporter->download(
+            $type.'-aging-'.$report['to'].'.xlsx',
+            array_values($columns),
+            $this->arrayExportRows($report['rows'], $columns),
+            [
+                [$title, __('As Of').' '.$report['to']],
+                [__('Total Balance'), $this->decimal($report['totals']['balance'])],
+                [__('Over 90 Days'), $this->decimal($report['totals']['over_90'])],
+            ]
+        );
+    }
+
+    private function agingData(Request $request, Collection $rows, string $type): array
+    {
         $search = trim((string) $request->input('q', ''));
         $rows = $rows->when($search !== '', fn (Collection $rows) => $rows->filter(
             fn (array $row) => str_contains(mb_strtolower($row['name']), mb_strtolower($search))
         ))->values();
 
-        return view('accounting.reports.aging', [
+        return [
             'type' => $type,
             'to' => $this->asOf($request),
             'search' => $search,
             'rows' => $rows,
             'totals' => collect(['current', 'days_31_60', 'days_61_90', 'over_90', 'unapplied_credit', 'balance'])
                 ->mapWithKeys(fn (string $column) => [$column => round((float) $rows->sum($column), 3)])->all(),
-        ]);
+        ];
+    }
+
+    private function selectedColumns(Request $request, array $allColumns): array
+    {
+        return collect($allColumns)
+            ->only($request->input('columns', array_keys($allColumns)))
+            ->all() ?: $allColumns;
+    }
+
+    private function arrayExportRows(iterable $rows, array $columns): array
+    {
+        return collect($rows)->map(fn (array $row) => collect(array_keys($columns))
+            ->map(function (string $column) use ($row) {
+                $value = $row[$column] ?? '';
+
+                if ($column === 'type' && is_string($value)) {
+                    return __(ucfirst($value));
+                }
+
+                return is_numeric($value) && ! in_array($column, ['code', 'entry_no'], true)
+                    ? $this->decimal((float) $value)
+                    : $value;
+            })->all())->all();
+    }
+
+    private function decimal(float $value): string
+    {
+        return number_format($value, 3, '.', '');
+    }
+
+    private function generalLedgerColumns(): array
+    {
+        return [
+            'date' => __('Date'),
+            'entry_no' => __('Entry No.'),
+            'account' => __('Account'),
+            'memo' => __('Memo'),
+            'debit' => __('Debit'),
+            'credit' => __('Credit'),
+            'running_balance' => __('Running Balance'),
+        ];
+    }
+
+    private function accountBalanceColumns(): array
+    {
+        return [
+            'code' => __('Code'),
+            'account' => __('Account'),
+            'type' => __('Account Type'),
+            'amount' => __('Amount'),
+        ];
+    }
+
+    private function agingColumns(string $type): array
+    {
+        return [
+            'name' => $type === 'receivables' ? __('Customer') : __('Supplier'),
+            'current' => __('0-30 Days'),
+            'days_31_60' => __('31-60 Days'),
+            'days_61_90' => __('61-90 Days'),
+            'over_90' => __('Over 90 Days'),
+            'unapplied_credit' => __('Unapplied Credit'),
+            'balance' => __('Balance'),
+        ];
+    }
+
+    private function cashBankColumns(): array
+    {
+        return [
+            'name' => __('Account'),
+            'type' => __('Type'),
+            'balance' => __('Balance'),
+        ];
     }
 }
