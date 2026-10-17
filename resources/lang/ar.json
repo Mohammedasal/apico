@@ -700,5 +700,7 @@
     "No open balances.": "لا توجد أرصدة مفتوحة.",
     "Balances from posted journal entries.": "الأرصدة من القيود المحاسبية المرحلة.",
     "Cash": "الصندوق",
-    "Bank": "البنك"
+    "Bank": "البنك",
+    "Operational Journal Coverage": "تغطية القيود التشغيلية",
+    ":count expected journal(s) are missing. Run the dry-run backfill before relying on accounting reports.": "يوجد :count قيد متوقع مفقود. شغّل المعاينة التجريبية للترحيل قبل الاعتماد على التقارير المحاسبية."
 }

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\AccountingPeriod;
 use App\Models\AccountMapping;
 use App\Models\ChartOfAccount;
+use App\Models\Customer;
 use App\Models\ExpenseVoucher;
 use App\Models\JournalEntry;
 use App\Models\Payment;
@@ -15,6 +16,7 @@ use App\Models\SalaryAdvance;
 use App\Models\Setting;
 use App\Models\StockPurchase;
 use App\Models\StockSale;
+use App\Models\Supplier;
 use App\Models\SupplierPayment;
 use App\Models\User;
 use Carbon\Carbon;
@@ -50,6 +52,68 @@ class AccountingPostingService
                 default => throw new \InvalidArgumentException('Unsupported accounting source: '.$source::class),
             };
         });
+    }
+
+    public function postOpeningBalances(string $date, ?User $user = null): ?JournalEntry
+    {
+        $existing = JournalEntry::where([
+            'source_module' => 'backfill',
+            'source_type' => 'OpeningBalances',
+            'source_id' => (int) str_replace('-', '', $date),
+            'posting_type' => 'opening_balances',
+            'status' => 'posted',
+        ])->first();
+
+        if ($existing) {
+            return $existing->load('lines.account');
+        }
+
+        $lines = collect();
+        $receivables = $this->mappedAccount('accounts_receivable_control');
+        $payables = $this->mappedAccount('accounts_payable_control');
+
+        Customer::where('opening_balance', '!=', 0)->each(function (Customer $customer) use ($lines, $receivables) {
+            $amount = abs(round((float) $customer->opening_balance, 3));
+            $lines->push($this->line(
+                $receivables->id,
+                (float) $customer->opening_balance > 0 ? $amount : 0,
+                (float) $customer->opening_balance < 0 ? $amount : 0,
+                customerId: $customer->id
+            ));
+        });
+        Supplier::where('opening_balance', '!=', 0)->each(function (Supplier $supplier) use ($lines, $payables) {
+            $amount = abs(round((float) $supplier->opening_balance, 3));
+            $lines->push($this->line(
+                $payables->id,
+                (float) $supplier->opening_balance < 0 ? $amount : 0,
+                (float) $supplier->opening_balance > 0 ? $amount : 0,
+                supplierId: $supplier->id
+            ));
+        });
+
+        if ($lines->isEmpty()) {
+            return null;
+        }
+
+        $difference = round((float) $lines->sum('debit') - (float) $lines->sum('credit'), 3);
+        if (abs($difference) >= 0.0005) {
+            $lines->push($this->line(
+                $this->mappedAccount('retained_earnings')->id,
+                $difference < 0 ? abs($difference) : 0,
+                $difference > 0 ? $difference : 0
+            ));
+        }
+
+        return $this->createPostedEntry([
+            'entry_date' => $date,
+            'memo_en' => 'Operational opening balances',
+            'memo_ar' => 'الأرصدة الافتتاحية التشغيلية',
+            'source_module' => 'backfill',
+            'source_type' => 'OpeningBalances',
+            'source_id' => (int) str_replace('-', '', $date),
+            'posting_type' => 'opening_balances',
+            'is_auto' => true,
+        ], $lines->all(), $user);
     }
 
     public function repostOperational(Model $source, ?User $user = null): Collection

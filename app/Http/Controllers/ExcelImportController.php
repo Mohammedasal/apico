@@ -9,6 +9,7 @@ use App\Models\RecycleOut;
 use App\Models\StockPurchase;
 use App\Models\StockSale;
 use App\Models\Supplier;
+use App\Services\AccountingPostingService;
 use App\Services\ApicoExcelImporter;
 use App\Services\ProductionExcelImporter;
 use Illuminate\Http\Request;
@@ -20,7 +21,7 @@ use ZipArchive;
 
 class ExcelImportController extends Controller
 {
-    public function store(Request $request, ApicoExcelImporter $importer)
+    public function store(Request $request, ApicoExcelImporter $importer, AccountingPostingService $posting)
     {
         $data = $request->validate([
             'sales_sheet' => $this->excelWorkbookRules(),
@@ -33,7 +34,8 @@ class ExcelImportController extends Controller
         $fullPath = Storage::path($path);
         $this->backupDatabase();
 
-        $result = DB::transaction(function () use ($importer, $fullPath, $request) {
+        $result = DB::transaction(function () use ($importer, $fullPath, $request, $posting) {
+            $this->reverseImportedAccounting($posting, $request);
             $this->wipeImportedData();
             $userId = $request->user()->id;
 
@@ -42,6 +44,7 @@ class ExcelImportController extends Controller
             foreach ([StockSale::class, StockPurchase::class, Payment::class, RecycleOut::class, RecycleIn::class] as $model) {
                 $model::query()->update(['created_by' => $userId, 'updated_by' => null]);
             }
+            $this->postImportedAccounting($posting, $request);
 
             return $result;
         });
@@ -139,5 +142,23 @@ class ExcelImportController extends Controller
         RecycleOut::query()->delete();
         RecycleIn::query()->delete();
         Customer::query()->where('name', '!=', 'Sample Customer')->delete();
+    }
+
+    private function reverseImportedAccounting(AccountingPostingService $posting, Request $request): void
+    {
+        foreach ([StockSale::class, StockPurchase::class, Payment::class, RecycleOut::class] as $model) {
+            $model::query()->orderBy('id')->each(
+                fn ($record) => $posting->reverseOperational($record, $request->user())
+            );
+        }
+    }
+
+    private function postImportedAccounting(AccountingPostingService $posting, Request $request): void
+    {
+        foreach ([RecycleOut::class, Payment::class, StockPurchase::class, StockSale::class] as $model) {
+            $model::query()->orderBy('date')->orderBy('id')->each(
+                fn ($record) => $posting->postOperational($record, $request->user())
+            );
+        }
     }
 }

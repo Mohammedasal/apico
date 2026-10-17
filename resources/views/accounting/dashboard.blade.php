@@ -13,6 +13,11 @@
     <strong>{{ __('Automatic Posting') }}:</strong>
     {{ $accountingEnabled ? __('Enabled') : __('Disabled until mappings are approved') }}
 </div>
+<div class="status" style="border-color:{{ $sourceCoverage['missing'] === 0 ? '#86b99c' : '#e5bf73' }};background:{{ $sourceCoverage['missing'] === 0 ? '#edf9f1' : '#fff8e8' }}">
+    <strong>{{ __('Operational Journal Coverage') }}:</strong>
+    {{ number_format($sourceCoverage['percentage'], 2) }}% ({{ $sourceCoverage['covered'] }} / {{ $sourceCoverage['total'] }})
+    @if ($sourceCoverage['missing'] > 0)<span class="muted">{{ __(':count expected journal(s) are missing. Run the dry-run backfill before relying on accounting reports.', ['count' => $sourceCoverage['missing']]) }}</span>@endif
+</div>
 
 <div class="kpi-grid">
     <div class="card kpi-card"><div class="muted">{{ __('Chart Accounts') }}</div><div class="kpi">{{ $accountCount }}</div><a href="{{ route('accounting.accounts.index') }}">{{ __('Open') }}</a></div>

@@ -3,9 +3,14 @@
 namespace Tests\Feature;
 
 use App\Models\Customer;
+use App\Models\JournalEntry;
+use App\Models\Payment;
 use App\Models\RecycleIn;
+use App\Models\Setting;
 use App\Models\User;
+use App\Services\AccountingPostingService;
 use App\Services\ApicoExcelImporter;
+use Database\Seeders\AccountingSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
@@ -81,6 +86,31 @@ class ExcelImportToleranceTest extends TestCase
         } finally {
             @unlink($path);
         }
+    }
+
+    public function test_flush_import_reverses_old_operational_journals_in_the_same_transaction(): void
+    {
+        $this->seed(AccountingSeeder::class);
+        Setting::where('key', 'accounting_enabled')->update(['value' => '1']);
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $customer = Customer::create(['name' => 'Old Customer', 'status' => 'active']);
+        $payment = Payment::create(['date' => '2026-01-01', 'customer_id' => $customer->id, 'amount' => 100, 'payment_type' => 'cash']);
+        app(AccountingPostingService::class)->postOperational($payment, $admin);
+        $originalEntry = JournalEntry::firstOrFail();
+        $path = storage_path('app/test-accounting-flush.xlsx');
+        $this->createWorkbook($path);
+
+        $response = $this->actingAs($admin)->post(route('imports.sales-sheet.store'), [
+            'sales_sheet' => new UploadedFile($path, 'sales-sheet.xlsx', 'application/zip', null, true),
+        ]);
+
+        $response->assertRedirect(route('dashboard'));
+        $this->assertDatabaseMissing('payments', ['id' => $payment->id]);
+        $this->assertSame('reversed', $originalEntry->fresh()->status);
+        $this->assertDatabaseHas('journal_entries', [
+            'reversal_of_journal_entry_id' => $originalEntry->id,
+            'status' => 'posted',
+        ]);
     }
 
     private function createWorkbook(string $path): void
