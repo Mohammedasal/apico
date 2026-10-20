@@ -11,10 +11,28 @@ use Illuminate\Support\Str;
 
 class SupplierController extends Controller
 {
-    public function index(Request $request, ApicoCalculator $calculator)
+    public function index(Request $request)
     {
-        $search = trim((string) $request->input('q', ''));
+        $validated = $request->validate([
+            'q' => ['nullable', 'string', 'max:255'],
+            'status' => ['nullable', 'in:active,inactive'],
+            'sort' => ['nullable', 'in:name,balance_jod,purchased_kg,status'],
+            'direction' => ['nullable', 'in:asc,desc'],
+            'per_page' => ['nullable', 'integer', 'in:25,50,100'],
+        ]);
+        $search = trim((string) ($validated['q'] ?? ''));
+        $sort = $validated['sort'] ?? 'name';
+        $direction = $validated['direction'] ?? 'asc';
+        $sortColumn = [
+            'name' => 'name',
+            'balance_jod' => 'remaining_balance_jod',
+            'purchased_kg' => 'purchased_kg',
+            'status' => 'status',
+        ][$sort];
         $suppliers = Supplier::query()
+            ->select('suppliers.*')
+            ->selectRaw($this->supplierBalanceSql().' AS remaining_balance_jod')
+            ->selectRaw('ROUND(COALESCE((SELECT SUM(weight_kg) FROM stock_purchases WHERE stock_purchases.supplier_id = suppliers.id), 0), 3) AS purchased_kg')
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($query) use ($search) {
                     $query->where('name', 'like', "%{$search}%")
@@ -23,13 +41,16 @@ class SupplierController extends Controller
                         ->orWhere('notes', 'like', "%{$search}%");
                 });
             })
-            ->orderBy('name')
-            ->get();
-        $suppliers->each(function (Supplier $supplier) use ($calculator) {
-            $supplier->setAttribute('remaining_balance_jod', $calculator->supplierBalance($supplier));
-        });
+            ->when($validated['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
+            ->orderBy($sortColumn, $direction)
+            ->orderBy('id')
+            ->paginate((int) ($validated['per_page'] ?? 25))
+            ->withQueryString();
 
-        return view('suppliers.index', compact('suppliers', 'search'));
+        return view('suppliers.index', compact('suppliers', 'search', 'sort', 'direction') + [
+            'status' => $validated['status'] ?? '',
+            'perPage' => (int) ($validated['per_page'] ?? 25),
+        ]);
     }
 
     public function create()
@@ -116,6 +137,13 @@ class SupplierController extends Controller
             'status' => ['required', 'in:active,inactive'],
             'notes' => ['nullable', 'string'],
         ]);
+    }
+
+    private function supplierBalanceSql(): string
+    {
+        return 'ROUND(COALESCE(suppliers.opening_balance, 0)
+            + COALESCE((SELECT SUM(total_cost) FROM stock_purchases WHERE stock_purchases.supplier_id = suppliers.id), 0)
+            - COALESCE((SELECT SUM(amount) FROM supplier_payments WHERE supplier_payments.supplier_id = suppliers.id), 0), 3)';
     }
 
     private function filterStatementRows($rows, string $search)

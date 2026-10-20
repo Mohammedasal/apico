@@ -726,5 +726,7 @@
     "Selected P&L Expense": "مصاريف الأرباح والخسائر المختارة",
     "Matched": "متطابق",
     "Needs Reconciliation": "يحتاج إلى مطابقة",
-    "No expense data for this year.": "لا توجد بيانات مصاريف لهذه السنة."
+    "No expense data for this year.": "لا توجد بيانات مصاريف لهذه السنة.",
+    "Purchased Kg": "الوزن المشترى كغم",
+    "Rows": "عدد الصفوف"
 }

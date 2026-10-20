@@ -11,10 +11,28 @@ use Illuminate\Support\Str;
 
 class CustomerController extends Controller
 {
-    public function index(Request $request, ApicoCalculator $calculator)
+    public function index(Request $request)
     {
-        $search = trim((string) $request->input('q', ''));
+        $validated = $request->validate([
+            'q' => ['nullable', 'string', 'max:255'],
+            'status' => ['nullable', 'in:active,inactive'],
+            'sort' => ['nullable', 'in:name,balance_kg,balance_jod,status'],
+            'direction' => ['nullable', 'in:asc,desc'],
+            'per_page' => ['nullable', 'integer', 'in:25,50,100'],
+        ]);
+        $search = trim((string) ($validated['q'] ?? ''));
+        $sort = $validated['sort'] ?? 'name';
+        $direction = $validated['direction'] ?? 'asc';
+        $sortColumn = [
+            'name' => 'name',
+            'balance_kg' => 'remaining_balance_kg',
+            'balance_jod' => 'remaining_balance_jod',
+            'status' => 'status',
+        ][$sort];
         $customers = Customer::query()
+            ->select('customers.*')
+            ->selectRaw($this->customerJodBalanceSql().' AS remaining_balance_jod')
+            ->selectRaw($this->customerKgBalanceSql().' AS remaining_balance_kg')
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($query) use ($search) {
                     $query->where('name', 'like', "%{$search}%")
@@ -23,19 +41,21 @@ class CustomerController extends Controller
                         ->orWhere('notes', 'like', "%{$search}%");
                 });
             })
-            ->orderBy('name')
-            ->get();
-        $customers->each(function (Customer $customer) use ($calculator) {
-            $customer->setAttribute('remaining_balance_jod', $calculator->customerBalance($customer));
-            $customer->setAttribute('remaining_balance_kg', $calculator->customerWeightDifference($customer));
-        });
+            ->when($validated['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
+            ->orderBy($sortColumn, $direction)
+            ->orderBy('id')
+            ->paginate((int) ($validated['per_page'] ?? 25))
+            ->withQueryString();
 
-        return view('customers.index', compact('customers', 'search'));
+        return view('customers.index', compact('customers', 'search', 'sort', 'direction') + [
+            'status' => $validated['status'] ?? '',
+            'perPage' => (int) ($validated['per_page'] ?? 25),
+        ]);
     }
 
     public function create()
     {
-        return view('customers.form', ['customer' => new Customer()]);
+        return view('customers.form', ['customer' => new Customer]);
     }
 
     public function store(Request $request)
@@ -117,6 +137,21 @@ class CustomerController extends Controller
             'status' => ['required', 'in:active,inactive'],
             'notes' => ['nullable', 'string'],
         ]);
+    }
+
+    private function customerJodBalanceSql(): string
+    {
+        return 'ROUND(COALESCE(customers.opening_balance, 0)
+            + COALESCE((SELECT SUM(total_amount) FROM recycle_outs WHERE recycle_outs.customer_id = customers.id), 0)
+            + COALESCE((SELECT SUM(sales_value) FROM stock_sales WHERE stock_sales.customer_id = customers.id), 0)
+            - COALESCE((SELECT SUM(amount) FROM payments WHERE payments.customer_id = customers.id), 0), 3)';
+    }
+
+    private function customerKgBalanceSql(): string
+    {
+        return 'ROUND(COALESCE(customers.opening_weight_balance_kg, 0)
+            + COALESCE((SELECT SUM(weight_kg) FROM recycle_ins WHERE recycle_ins.customer_id = customers.id), 0)
+            - COALESCE((SELECT SUM(weight_kg) FROM recycle_outs WHERE recycle_outs.customer_id = customers.id), 0), 3)';
     }
 
     private function filterStatementRows($rows, string $search)

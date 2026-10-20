@@ -9,18 +9,30 @@
 </div>
 <form class="filters" method="get">
     <div><label>{{ __('Search') }}</label><input name="q" value="{{ $search ?? '' }}" placeholder="{{ __('Name, phone, location, notes') }}"></div>
+    <div><label>{{ __('Status') }}</label><select name="status"><option value="">{{ __('All') }}</option><option value="active" @selected($status === 'active')>{{ __('Active') }}</option><option value="inactive" @selected($status === 'inactive')>{{ __('Inactive') }}</option></select></div>
+    <div><label>{{ __('Rows') }}</label><select name="per_page">@foreach ([25, 50, 100] as $size)<option value="{{ $size }}" @selected($perPage === $size)>{{ $size }}</option>@endforeach</select></div>
     <div><button>{{ __('Search') }}</button></div>
-    @if (($search ?? '') !== '')
+    @if (($search ?? '') !== '' || $status !== '')
         <div><a class="button" href="{{ route('suppliers.index') }}">{{ __('Clear') }}</a></div>
     @endif
 </form>
+@php
+    $sortUrl = function (string $column) use ($sort, $direction) {
+        $query = request()->except('page');
+        $query['sort'] = $column;
+        $query['direction'] = $sort === $column && $direction === 'asc' ? 'desc' : 'asc';
+        return route('suppliers.index', $query);
+    };
+    $sortIndicator = fn (string $column) => $sort === $column ? ($direction === 'asc' ? '&uarr;' : '&darr;') : '';
+@endphp
 <div class="table-wrap">
-<table id="suppliersTable">
-    <thead><tr><th><button class="table-sort" type="button" data-sort-column="0" data-sort-type="text">{{ __('Name') }} <span aria-hidden="true">--</span></button></th><th><button class="table-sort" type="button" data-sort-column="1" data-sort-type="number">{{ __('Remaining Balance JOD') }} <span aria-hidden="true">--</span></button></th><th><button class="table-sort" type="button" data-sort-column="2" data-sort-type="text">{{ __('Status') }} <span aria-hidden="true">--</span></button></th><th></th></tr></thead>
+<table>
+    <thead><tr><th><a class="sort-link" href="{{ $sortUrl('name') }}">{{ __('Name') }} <span>{!! $sortIndicator('name') !!}</span></a></th><th><a class="sort-link" href="{{ $sortUrl('purchased_kg') }}">{{ __('Purchased Kg') }} <span>{!! $sortIndicator('purchased_kg') !!}</span></a></th><th><a class="sort-link" href="{{ $sortUrl('balance_jod') }}">{{ __('Remaining Balance JOD') }} <span>{!! $sortIndicator('balance_jod') !!}</span></a></th><th><a class="sort-link" href="{{ $sortUrl('status') }}">{{ __('Status') }} <span>{!! $sortIndicator('status') !!}</span></a></th><th></th></tr></thead>
     <tbody>
     @foreach ($suppliers as $supplier)
         <tr>
             <td data-sort-value="{{ $supplier->name }}">{{ $supplier->name }}</td>
+            <td>{{ number_format((float) $supplier->purchased_kg, 3) }}</td>
             <td data-sort-value="{{ $supplier->remaining_balance_jod }}" @class(['amount-positive' => $supplier->remaining_balance_jod >= 0, 'amount-negative' => $supplier->remaining_balance_jod < 0])>{{ number_format($supplier->remaining_balance_jod, 3) }}</td>
             <td data-sort-value="{{ $supplier->status }}">{{ __(ucfirst($supplier->status)) }}</td>
             <td>
@@ -34,37 +46,5 @@
     </tbody>
 </table>
 </div>
-<script>
-document.querySelectorAll('#suppliersTable .table-sort').forEach((button) => {
-    button.addEventListener('click', () => {
-        const table = button.closest('table');
-        const tbody = table.querySelector('tbody');
-        const column = Number(button.dataset.sortColumn);
-        const type = button.dataset.sortType;
-        const currentDirection = button.dataset.direction === 'asc' ? 'desc' : 'asc';
-
-        table.querySelectorAll('.table-sort').forEach((sortButton) => {
-            sortButton.dataset.direction = '';
-            sortButton.querySelector('span').textContent = '--';
-        });
-
-        button.dataset.direction = currentDirection;
-        button.querySelector('span').textContent = currentDirection === 'asc' ? 'ASC' : 'DESC';
-
-        [...tbody.querySelectorAll('tr')]
-            .sort((leftRow, rightRow) => {
-                const leftCell = leftRow.children[column];
-                const rightCell = rightRow.children[column];
-                const leftValue = leftCell.dataset.sortValue || leftCell.textContent.trim();
-                const rightValue = rightCell.dataset.sortValue || rightCell.textContent.trim();
-                const result = type === 'number'
-                    ? Number(leftValue) - Number(rightValue)
-                    : leftValue.localeCompare(rightValue, undefined, { sensitivity: 'base' });
-
-                return currentDirection === 'asc' ? result : -result;
-            })
-            .forEach((row) => tbody.appendChild(row));
-    });
-});
-</script>
+{{ $suppliers->links() }}
 @endsection
