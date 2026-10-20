@@ -10,6 +10,7 @@ use App\Models\RecycleOut;
 use App\Models\StockPurchase;
 use App\Models\StockSale;
 use App\Services\ApicoExcelImporter;
+use App\Services\DatabaseBackupService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
@@ -25,25 +26,27 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-Artisan::command('apico:backup-database', function () {
-    $database = database_path('database.sqlite');
-
-    if (! File::exists($database)) {
-        $this->error('SQLite database file was not found.');
+Artisan::command('apico:backup-database', function (DatabaseBackupService $backups) {
+    try {
+        $target = $backups->create('apico-manual');
+    } catch (Throwable $exception) {
+        report($exception);
+        $this->error('Database backup failed verification. No valid backup was created.');
 
         return self::FAILURE;
     }
 
-    $directory = storage_path('app/backups');
-    File::ensureDirectoryExists($directory);
+    if ($target === null) {
+        $this->warn('The in-memory test database cannot be backed up.');
 
-    $target = $directory.'/apico-'.now()->format('Y-m-d-His').'.sqlite';
-    File::copy($database, $target);
+        return self::SUCCESS;
+    }
 
-    $this->info('Database backup created: '.$target);
+    $this->info('Verified database backup created: '.$target);
+    $this->line('Checksum: '.$target.'.sha256');
 
     return self::SUCCESS;
-})->purpose('Create a timestamped SQLite database backup');
+})->purpose('Create and verify a timestamped database backup');
 
 Artisan::command('apico:date-issues {path}', function (ApicoExcelImporter $importer) {
     $path = (string) $this->argument('path');
