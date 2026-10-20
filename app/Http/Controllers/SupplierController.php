@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Supplier;
 use App\Services\ApicoCalculator;
 use App\Services\AuditService;
+use App\Services\FormSubmissionGuard;
 use App\Services\SimpleXlsxExporter;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -60,10 +61,12 @@ class SupplierController extends Controller
         return view('suppliers.form', ['supplier' => new Supplier(['status' => 'active'])]);
     }
 
-    public function store(Request $request, AuditService $audit)
+    public function store(Request $request, AuditService $audit, FormSubmissionGuard $forms)
     {
-        DB::transaction(function () use ($request, $audit) {
-            $supplier = Supplier::create($this->validated($request));
+        $validated = $this->validated($request);
+        $forms->consume('supplier', $request->input('_submission_token'));
+        DB::transaction(function () use ($audit, $validated) {
+            $supplier = Supplier::create($validated);
             $audit->record('supplier_created', $supplier, null, $supplier->toArray());
         });
 
@@ -125,11 +128,13 @@ class SupplierController extends Controller
         return view('suppliers.form', compact('supplier'));
     }
 
-    public function update(Request $request, Supplier $supplier, AuditService $audit)
+    public function update(Request $request, Supplier $supplier, AuditService $audit, FormSubmissionGuard $forms)
     {
+        $validated = $this->validated($request);
+        $forms->assertFresh($supplier, $request->input('_record_version'));
         $before = $supplier->toArray();
-        DB::transaction(function () use ($request, $supplier, $audit, $before) {
-            $supplier->update($this->validated($request));
+        DB::transaction(function () use ($supplier, $audit, $before, $validated) {
+            $supplier->update($validated);
             $audit->record('supplier_updated', $supplier, $before, $supplier->fresh()->toArray());
         });
 

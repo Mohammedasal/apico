@@ -14,6 +14,12 @@
 <form method="post" action="{{ $isEdit ? route('supplier-payments.update', $payment) : route('supplier-payments.store') }}">
     @csrf
     @if ($isEdit) @method('put') @endif
+    @if ($isEdit)
+        <input type="hidden" name="_record_version" value="{{ app(\App\Services\FormSubmissionGuard::class)->version($payment) }}">
+    @else
+        <input type="hidden" name="_submission_token" value="{{ app(\App\Services\FormSubmissionGuard::class)->issue('supplier-payment') }}">
+    @endif
+    @error('form')<div class="error" style="margin-bottom:12px">{{ $message }}</div>@enderror
     <div class="form-grid">
         <div><label>{{ __('Date') }}</label><input type="date" name="date" value="{{ old('date', $payment->date?->toDateString() ?? now()->toDateString()) }}">@error('date')<div class="error">{{ $message }}</div>@enderror</div>
         <div><label>{{ __('Supplier') }}</label><select class="searchable-select" name="supplier_id"><option value="">{{ __('Select') }}</option>@foreach ($suppliers as $supplier)<option value="{{ $supplier->id }}" @selected(old('supplier_id', $payment->supplier_id) == $supplier->id)>{{ $supplier->name }}</option>@endforeach</select>@error('supplier_id')<div class="error">{{ $message }}</div>@enderror</div>

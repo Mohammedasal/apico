@@ -10,6 +10,7 @@ use App\Models\ExpenseVoucher;
 use App\Models\JournalEntry;
 use App\Services\AccountingPostingService;
 use App\Services\AuditService;
+use App\Services\FormSubmissionGuard;
 use App\Services\SimpleXlsxExporter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -76,9 +77,10 @@ class ExpenseVoucherController extends Controller
         ])));
     }
 
-    public function store(Request $request, AccountingPostingService $posting, AuditService $audit)
+    public function store(Request $request, AccountingPostingService $posting, AuditService $audit, FormSubmissionGuard $forms)
     {
         $data = $this->validated($request);
+        $forms->consume('expense-voucher', $request->input('_submission_token'));
 
         $voucher = DB::transaction(function () use ($data, $request, $posting, $audit) {
             $voucher = ExpenseVoucher::create($data + [
@@ -116,7 +118,7 @@ class ExpenseVoucherController extends Controller
         return view('accounting.expenses.form', $this->formData($expense));
     }
 
-    public function update(Request $request, ExpenseVoucher $expense, AccountingPostingService $posting, AuditService $audit)
+    public function update(Request $request, ExpenseVoucher $expense, AccountingPostingService $posting, AuditService $audit, FormSubmissionGuard $forms)
     {
         if ($expense->status !== 'posted') {
             throw ValidationException::withMessages(['status' => __('Cancelled expense vouchers cannot be edited.')]);
@@ -126,6 +128,7 @@ class ExpenseVoucherController extends Controller
         }
 
         $data = $this->validated($request);
+        $forms->assertFresh($expense, $request->input('_record_version'));
         DB::transaction(function () use ($expense, $data, $request, $posting, $audit) {
             $before = $expense->toArray();
             $expense->update($data + ['updated_by' => $request->user()->id]);

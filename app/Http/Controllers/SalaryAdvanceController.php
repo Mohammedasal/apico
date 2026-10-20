@@ -9,6 +9,7 @@ use App\Models\PayrollRun;
 use App\Models\SalaryAdvance;
 use App\Services\AccountingPostingService;
 use App\Services\AuditService;
+use App\Services\FormSubmissionGuard;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -55,7 +56,7 @@ class SalaryAdvanceController extends Controller
         ]);
     }
 
-    public function store(Request $request, AccountingPostingService $posting, AuditService $audit)
+    public function store(Request $request, AccountingPostingService $posting, AuditService $audit, FormSubmissionGuard $forms)
     {
         $data = $request->validate([
             'employee_id' => ['required', 'exists:employees,id'],
@@ -67,6 +68,7 @@ class SalaryAdvanceController extends Controller
             'reference' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string'],
         ]);
+        $forms->consume('salary-advance', $request->input('_submission_token'));
 
         $paymentDate = Carbon::parse($data['payment_date']);
         $payroll = PayrollRun::where('period_year', $paymentDate->year)

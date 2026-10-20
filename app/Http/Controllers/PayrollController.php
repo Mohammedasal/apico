@@ -10,6 +10,7 @@ use App\Models\PayrollRun;
 use App\Models\SalaryAdvance;
 use App\Services\AccountingPostingService;
 use App\Services\AuditService;
+use App\Services\FormSubmissionGuard;
 use App\Services\SimpleXlsxExporter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -36,9 +37,10 @@ class PayrollController extends Controller
         ])));
     }
 
-    public function store(Request $request, AuditService $audit)
+    public function store(Request $request, AuditService $audit, FormSubmissionGuard $forms)
     {
         [$runData, $lines] = $this->validated($request);
+        $forms->consume('payroll', $request->input('_submission_token'));
 
         $run = DB::transaction(function () use ($runData, $lines, $request, $audit) {
             $run = PayrollRun::create($runData + ['status' => 'draft', 'created_by' => $request->user()->id]);
@@ -86,10 +88,11 @@ class PayrollController extends Controller
         return view('accounting.payroll.form', $this->formData($payroll->load('lines')));
     }
 
-    public function update(Request $request, PayrollRun $payroll, AuditService $audit)
+    public function update(Request $request, PayrollRun $payroll, AuditService $audit, FormSubmissionGuard $forms)
     {
         $this->assertDraft($payroll);
         [$runData, $lines] = $this->validated($request, $payroll);
+        $forms->assertFresh($payroll, $request->input('_record_version'));
 
         DB::transaction(function () use ($payroll, $runData, $lines, $request, $audit) {
             $before = $payroll->load('lines')->toArray();

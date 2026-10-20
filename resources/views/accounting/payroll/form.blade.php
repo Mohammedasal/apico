@@ -6,6 +6,12 @@
 <form method="post" action="{{ $isEdit ? route('accounting.payroll.update', $payroll) : route('accounting.payroll.store') }}">
     @csrf
     @if ($isEdit) @method('put') @endif
+    @if ($isEdit)
+        <input type="hidden" name="_record_version" value="{{ app(\App\Services\FormSubmissionGuard::class)->version($payroll) }}">
+    @else
+        <input type="hidden" name="_submission_token" value="{{ app(\App\Services\FormSubmissionGuard::class)->issue('payroll') }}">
+    @endif
+    @error('form')<div class="error" style="margin-bottom:12px">{{ $message }}</div>@enderror
     <div class="form-grid">
         <div><label>{{ __('Year') }}</label><input type="number" name="period_year" value="{{ old('period_year', $payroll->period_year) }}"></div>
         <div><label>{{ __('Month') }}</label><input type="number" min="1" max="12" name="period_month" value="{{ old('period_month', $payroll->period_month) }}"></div>

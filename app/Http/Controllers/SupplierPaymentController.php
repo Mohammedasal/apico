@@ -8,6 +8,7 @@ use App\Models\Supplier;
 use App\Models\SupplierPayment;
 use App\Services\AccountingPostingService;
 use App\Services\AuditService;
+use App\Services\FormSubmissionGuard;
 use App\Services\SimpleXlsxExporter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -63,10 +64,12 @@ class SupplierPaymentController extends Controller
         ]);
     }
 
-    public function store(Request $request, AccountingPostingService $posting, AuditService $audit)
+    public function store(Request $request, AccountingPostingService $posting, AuditService $audit, FormSubmissionGuard $forms)
     {
-        $payment = DB::transaction(function () use ($request, $posting, $audit) {
-            $payment = SupplierPayment::create($this->validated($request) + ['created_by' => $request->user()->id]);
+        $validated = $this->validated($request);
+        $forms->consume('supplier-payment', $request->input('_submission_token'));
+        $payment = DB::transaction(function () use ($request, $posting, $audit, $validated) {
+            $payment = SupplierPayment::create($validated + ['created_by' => $request->user()->id]);
             $posting->postOperational($payment, $request->user());
             $audit->record('supplier_payment_created', $payment, null, $payment->toArray());
 
@@ -90,16 +93,18 @@ class SupplierPaymentController extends Controller
         ]);
     }
 
-    public function update(Request $request, SupplierPayment $supplierPayment, AccountingPostingService $posting, AuditService $audit)
+    public function update(Request $request, SupplierPayment $supplierPayment, AccountingPostingService $posting, AuditService $audit, FormSubmissionGuard $forms)
     {
         if ($supplierPayment->payment_type === 'cheque' && $supplierPayment->cheque_status !== 'pending') {
             throw ValidationException::withMessages([
                 'cheque_status' => __('Settled cheques must be corrected from the cheque settlement page.'),
             ]);
         }
+        $validated = $this->validated($request, $supplierPayment);
+        $forms->assertFresh($supplierPayment, $request->input('_record_version'));
         $before = $supplierPayment->toArray();
-        DB::transaction(function () use ($request, $supplierPayment, $posting, $audit, $before) {
-            $supplierPayment->update($this->validated($request, $supplierPayment) + ['updated_by' => $request->user()->id]);
+        DB::transaction(function () use ($request, $supplierPayment, $posting, $audit, $before, $validated) {
+            $supplierPayment->update($validated + ['updated_by' => $request->user()->id]);
             $posting->repostOperational($supplierPayment->fresh(), $request->user());
             $audit->record('supplier_payment_updated', $supplierPayment, $before, $supplierPayment->fresh()->toArray());
         });

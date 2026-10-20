@@ -5,6 +5,8 @@
 <div class="status">{{ __('Manual journals are only for accounting-only transactions and approved corrections.') }}</div>
 <form method="post" action="{{ route('accounting.journals.store') }}">
     @csrf
+    <input type="hidden" name="_submission_token" value="{{ app(\App\Services\FormSubmissionGuard::class)->issue('manual-journal') }}">
+    @error('form')<div class="error" style="margin-bottom:12px">{{ $message }}</div>@enderror
     <div class="form-grid">
         <div><label>{{ __('Date') }}</label><input type="date" name="entry_date" value="{{ old('entry_date', now()->toDateString()) }}">@error('entry_date')<div class="error">{{ $message }}</div>@enderror</div>
         <div><label>{{ __('English Memo') }}</label><input name="memo_en" value="{{ old('memo_en') }}"></div>

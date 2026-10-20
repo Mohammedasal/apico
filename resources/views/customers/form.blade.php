@@ -5,6 +5,12 @@
 <form method="post" action="{{ $customer->exists ? route('customers.update', $customer) : route('customers.store') }}">
     @csrf
     @if ($customer->exists) @method('put') @endif
+    @if ($customer->exists)
+        <input type="hidden" name="_record_version" value="{{ app(\App\Services\FormSubmissionGuard::class)->version($customer) }}">
+    @else
+        <input type="hidden" name="_submission_token" value="{{ app(\App\Services\FormSubmissionGuard::class)->issue('customer') }}">
+    @endif
+    @error('form')<div class="error" style="margin-bottom:12px">{{ $message }}</div>@enderror
     <div class="form-grid">
         <div><label>{{ __('Name') }}</label><input name="name" value="{{ old('name', $customer->name) }}">@error('name')<div class="error">{{ $message }}</div>@enderror</div>
         <div><label>{{ __('Phone') }}</label><input name="phone" value="{{ old('phone', $customer->phone) }}"></div>

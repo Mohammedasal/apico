@@ -6,6 +6,12 @@
 <form method="post" action="{{ $isEdit ? route('suppliers.update', $supplier) : route('suppliers.store') }}">
     @csrf
     @if ($isEdit) @method('put') @endif
+    @if ($isEdit)
+        <input type="hidden" name="_record_version" value="{{ app(\App\Services\FormSubmissionGuard::class)->version($supplier) }}">
+    @else
+        <input type="hidden" name="_submission_token" value="{{ app(\App\Services\FormSubmissionGuard::class)->issue('supplier') }}">
+    @endif
+    @error('form')<div class="error" style="margin-bottom:12px">{{ $message }}</div>@enderror
     <div class="form-grid">
         <div><label>{{ __('Name') }}</label><input name="name" value="{{ old('name', $supplier->name) }}">@error('name')<div class="error">{{ $message }}</div>@enderror</div>
         <div><label>{{ __('Phone') }}</label><input name="phone" value="{{ old('phone', $supplier->phone) }}"></div>

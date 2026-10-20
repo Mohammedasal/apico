@@ -6,6 +6,12 @@
 <form method="post" action="{{ $isEdit ? route('accounting.expenses.update', $voucher) : route('accounting.expenses.store') }}">
     @csrf
     @if ($isEdit) @method('put') @endif
+    @if ($isEdit)
+        <input type="hidden" name="_record_version" value="{{ app(\App\Services\FormSubmissionGuard::class)->version($voucher) }}">
+    @else
+        <input type="hidden" name="_submission_token" value="{{ app(\App\Services\FormSubmissionGuard::class)->issue('expense-voucher') }}">
+    @endif
+    @error('form')<div class="error" style="margin-bottom:12px">{{ $message }}</div>@enderror
     <div class="form-grid">
         <div><label>{{ __('Date') }}</label><input type="date" name="expense_date" value="{{ old('expense_date', $voucher->expense_date?->toDateString() ?? now()->toDateString()) }}">@error('expense_date')<div class="error">{{ $message }}</div>@enderror</div>
         <div><label>{{ __('Category') }}</label><select class="searchable-select" name="expense_category_id"><option value="">{{ __('Select') }}</option>@foreach ($categories as $category)<option value="{{ $category->id }}" @selected(old('expense_category_id', $voucher->expense_category_id) == $category->id)>{{ $category->localized_name }}</option>@endforeach</select>@error('expense_category_id')<div class="error">{{ $message }}</div>@enderror</div>

@@ -8,6 +8,8 @@
 
 <form method="post" action="{{ route('accounting.salary-advances.store') }}">
     @csrf
+    <input type="hidden" name="_submission_token" value="{{ app(\App\Services\FormSubmissionGuard::class)->issue('salary-advance') }}">
+    @error('form')<div class="error" style="margin-bottom:12px">{{ $message }}</div>@enderror
     <div class="form-grid">
         <div><label>{{ __('Employee') }}</label><select class="searchable-select" name="employee_id" required><option value="">{{ __('Select Employee') }}</option>@foreach ($employees as $employee)<option value="{{ $employee->id }}" @selected(old('employee_id', $selectedEmployee) == $employee->id)>{{ $employee->localized_name }} - {{ number_format($employee->base_salary, 3) }} {{ __('JOD') }}</option>@endforeach</select></div>
         <div><label>{{ __('Payment Date') }}</label><input type="date" name="payment_date" value="{{ old('payment_date', $paymentDate) }}" required></div>

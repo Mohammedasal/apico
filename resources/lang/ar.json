@@ -783,5 +783,7 @@
     "Before": "قبل",
     "After": "بعد",
     "Recycle Amount Variances": "فروقات مبالغ التدوير",
-    "Absolute": "المطلق"
+    "Absolute": "المطلق",
+    "This form was already submitted or has expired. Refresh the page and review the saved records.": "تم إرسال هذا النموذج مسبقاً أو انتهت صلاحيته. حدّث الصفحة وراجع السجلات المحفوظة.",
+    "This record changed after you opened it. Reload the page before saving your changes.": "تم تعديل هذا السجل بعد فتحه. أعد تحميل الصفحة قبل حفظ تغييراتك."
 }

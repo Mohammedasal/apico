@@ -16,6 +16,7 @@ use App\Models\Supplier;
 use App\Services\AccountingPostingService;
 use App\Services\ApicoCalculator;
 use App\Services\AuditService;
+use App\Services\FormSubmissionGuard;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -84,9 +85,10 @@ class OperationController extends Controller
         ]);
     }
 
-    public function store(string $module, Request $request, ApicoCalculator $calculator, AccountingPostingService $posting, AuditService $audit)
+    public function store(string $module, Request $request, ApicoCalculator $calculator, AccountingPostingService $posting, AuditService $audit, FormSubmissionGuard $forms)
     {
         $data = $this->validated($module, $request, $calculator);
+        $forms->consume('operation-'.$module, $request->input('_submission_token'));
         $data['created_by'] = $request->user()->id;
         $record = DB::transaction(function () use ($module, $data, $request, $posting, $audit) {
             $record = $this->module($module)['model']::create($data);
@@ -117,13 +119,14 @@ class OperationController extends Controller
         ]);
     }
 
-    public function update(string $module, int $id, Request $request, ApicoCalculator $calculator, AccountingPostingService $posting, AuditService $audit)
+    public function update(string $module, int $id, Request $request, ApicoCalculator $calculator, AccountingPostingService $posting, AuditService $audit, FormSubmissionGuard $forms)
     {
         $record = $this->module($module)['model']::findOrFail($id);
         if ($record instanceof Payment && $record->payment_type === 'cheque' && $record->cheque_status !== 'pending') {
             throw ValidationException::withMessages(['cheque_status' => __('Settled cheques must be corrected from the cheque settlement page.')]);
         }
         $data = $this->validated($module, $request, $calculator, $id);
+        $forms->assertFresh($record, $request->input('_record_version'));
         $data['updated_by'] = $request->user()->id;
         $before = $record->toArray();
         DB::transaction(function () use ($record, $data, $request, $posting, $audit, $before) {

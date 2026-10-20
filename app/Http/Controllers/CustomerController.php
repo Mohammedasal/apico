@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Customer;
 use App\Services\ApicoCalculator;
 use App\Services\AuditService;
+use App\Services\FormSubmissionGuard;
 use App\Services\SimpleXlsxExporter;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -60,10 +61,12 @@ class CustomerController extends Controller
         return view('customers.form', ['customer' => new Customer]);
     }
 
-    public function store(Request $request, AuditService $audit)
+    public function store(Request $request, AuditService $audit, FormSubmissionGuard $forms)
     {
-        DB::transaction(function () use ($request, $audit) {
-            $customer = Customer::create($this->validated($request));
+        $validated = $this->validated($request);
+        $forms->consume('customer', $request->input('_submission_token'));
+        DB::transaction(function () use ($audit, $validated) {
+            $customer = Customer::create($validated);
             $audit->record('customer_created', $customer, null, $customer->toArray());
         });
 
@@ -124,11 +127,13 @@ class CustomerController extends Controller
         return view('customers.form', compact('customer'));
     }
 
-    public function update(Request $request, Customer $customer, AuditService $audit)
+    public function update(Request $request, Customer $customer, AuditService $audit, FormSubmissionGuard $forms)
     {
+        $validated = $this->validated($request);
+        $forms->assertFresh($customer, $request->input('_record_version'));
         $before = $customer->toArray();
-        DB::transaction(function () use ($request, $customer, $audit, $before) {
-            $customer->update($this->validated($request));
+        DB::transaction(function () use ($customer, $audit, $before, $validated) {
+            $customer->update($validated);
             $audit->record('customer_updated', $customer, $before, $customer->fresh()->toArray());
         });
 

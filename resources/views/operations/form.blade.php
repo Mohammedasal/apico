@@ -29,6 +29,12 @@
 <form method="post" action="{{ $isEdit ? route('operations.update', [$module, $record->id]) : route('operations.store', $module) }}">
     @csrf
     @if ($isEdit) @method('put') @endif
+    @if ($isEdit)
+        <input type="hidden" name="_record_version" value="{{ app(\App\Services\FormSubmissionGuard::class)->version($record) }}">
+    @else
+        <input type="hidden" name="_submission_token" value="{{ app(\App\Services\FormSubmissionGuard::class)->issue('operation-'.$module) }}">
+    @endif
+    @error('form')<div class="error" style="margin-bottom:12px">{{ $message }}</div>@enderror
     <div class="form-grid">
         <div><label>{{ __('Date') }}</label><input type="date" name="date" value="{{ old('date', $record?->date?->toDateString() ?? now()->toDateString()) }}">@error('date')<div class="error">{{ $message }}</div>@enderror</div>
         @if ($module !== 'stock-purchases')

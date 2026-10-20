@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\ChartOfAccount;
 use App\Models\JournalEntry;
 use App\Services\AccountingPostingService;
+use App\Services\FormSubmissionGuard;
 use Illuminate\Http\Request;
 
 class JournalEntryController extends Controller
@@ -39,7 +40,7 @@ class JournalEntryController extends Controller
         ]);
     }
 
-    public function store(Request $request, AccountingPostingService $posting)
+    public function store(Request $request, AccountingPostingService $posting, FormSubmissionGuard $forms)
     {
         $data = $request->validate([
             'entry_date' => ['required', 'date'],
@@ -56,6 +57,7 @@ class JournalEntryController extends Controller
             ->filter(fn ($line) => filled($line['account_id'] ?? null))
             ->values()
             ->all();
+        $forms->consume('manual-journal', $request->input('_submission_token'));
         $journal = $posting->createPostedEntry([
             'entry_date' => $data['entry_date'],
             'memo_en' => $data['memo_en'] ?? null,
