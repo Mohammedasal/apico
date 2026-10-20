@@ -21,6 +21,7 @@
             request()->routeIs('dashboards.recycle-out') => 'Recycle Out Dashboard',
             request()->routeIs('settings.*') => 'Settings',
             request()->routeIs('users.*') => 'Users',
+            request()->routeIs('audit-logs.*') => 'Audit Log',
             request()->routeIs('accounting.reports.trial-balance*') => 'Trial Balance',
             request()->routeIs('accounting.reports.general-ledger*') => 'General Ledger',
             request()->routeIs('accounting.reports.profit-loss*') => 'Accounting P&L',
@@ -253,6 +254,7 @@
             <div class="nav-section">{{ __('System') }}</div>
             <a @class(['active' => request()->routeIs('settings.*')]) href="{{ route('settings.index') }}">{{ __('Settings') }}</a>
             <a @class(['active' => request()->routeIs('users.*')]) href="{{ route('users.index') }}">{{ __('Users') }}</a>
+            <a @class(['active' => request()->routeIs('audit-logs.*')]) href="{{ route('audit-logs.index') }}">{{ __('Audit Log') }}</a>
         @endif
     </nav>
 </header>

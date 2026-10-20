@@ -7,8 +7,10 @@ use App\Models\ProductionDay;
 use App\Models\RecycleOut;
 use App\Models\StockSale;
 use App\Services\ApicoCalculator;
+use App\Services\AuditService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ProductionController extends Controller
 {
@@ -66,7 +68,7 @@ class ProductionController extends Controller
         ]);
     }
 
-    public function saveDays(Request $request)
+    public function saveDays(Request $request, AuditService $audit)
     {
         $data = $request->validate([
             'year' => ['required', 'integer'],
@@ -78,21 +80,28 @@ class ProductionController extends Controller
             'days.*.notes' => ['nullable', 'string'],
         ]);
 
-        foreach ($data['days'] ?? [] as $row) {
-            ProductionDay::updateOrCreate(
-                ['date' => $row['date']],
-                [
-                    'shift_one_kg' => (float) ($row['shift_one_kg'] ?? 0),
-                    'shift_two_kg' => (float) ($row['shift_two_kg'] ?? 0),
-                    'notes' => $row['notes'] ?? null,
-                ]
-            );
-        }
+        $dates = collect($data['days'] ?? [])->pluck('date')->all();
+        $before = ProductionDay::whereIn('date', $dates)->orderBy('date')->get()->toArray();
+        DB::transaction(function () use ($data, $dates, $before, $audit) {
+            foreach ($data['days'] ?? [] as $row) {
+                ProductionDay::updateOrCreate(
+                    ['date' => $row['date']],
+                    [
+                        'shift_one_kg' => (float) ($row['shift_one_kg'] ?? 0),
+                        'shift_two_kg' => (float) ($row['shift_two_kg'] ?? 0),
+                        'notes' => $row['notes'] ?? null,
+                    ]
+                );
+            }
+
+            $after = ProductionDay::whereIn('date', $dates)->orderBy('date')->get()->toArray();
+            $audit->recordEvent('production_days_saved', ProductionDay::class, null, $before, $after);
+        });
 
         return redirect()->route('production.index', ['year' => $data['year'], 'month' => $data['month']])->with('status', 'Daily production saved.');
     }
 
-    public function saveExpenses(Request $request)
+    public function saveExpenses(Request $request, AuditService $audit)
     {
         $data = $request->validate([
             'year' => ['required', 'integer'],
@@ -107,9 +116,10 @@ class ProductionController extends Controller
             'notes' => ['nullable', 'string'],
         ]);
 
-        MonthlyExpense::updateOrCreate(
-            ['year' => $data['year'], 'month' => $data['month']],
-            [
+        DB::transaction(function () use ($data, $audit) {
+            $expense = MonthlyExpense::firstOrNew(['year' => $data['year'], 'month' => $data['month']]);
+            $before = $expense->exists ? $expense->toArray() : null;
+            $expense->fill([
                 'average_income_per_ton' => (float) ($data['average_income_per_ton'] ?? 140),
                 'electricity_bill' => (float) ($data['electricity_bill'] ?? 0),
                 'total_salaries' => (float) ($data['total_salaries'] ?? 0),
@@ -118,8 +128,9 @@ class ProductionController extends Controller
                 'social_security' => (float) ($data['social_security'] ?? 0),
                 'other_expenses' => (float) ($data['other_expenses'] ?? 0),
                 'notes' => $data['notes'] ?? null,
-            ]
-        );
+            ])->save();
+            $audit->record('monthly_expense_saved', $expense, $before, $expense->fresh()->toArray());
+        });
 
         return redirect()->route('production.index', ['year' => $data['year'], 'month' => $data['month']])->with('status', 'Monthly expenses saved.');
     }
@@ -157,7 +168,7 @@ class ProductionController extends Controller
             3
         );
         $actual = $calculator->actualProfitSummary($start->toDateString(), $end->toDateString());
-        $monthlyExpenses = MonthlyExpense::where(function ($query) use ($start, $end) {
+        $monthlyExpenses = MonthlyExpense::where(function ($query) use ($start) {
             $query->where('year', '>', $start->year)
                 ->orWhere(fn ($query) => $query->where('year', $start->year)->where('month', '>=', $start->month));
         })

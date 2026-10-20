@@ -72,6 +72,11 @@ class ProductionExcelImporterTest extends TestCase
         $this->assertDatabaseMissing('production_days', ['date' => '2026-01-02 00:00:00']);
         $this->assertDatabaseHas('monthly_expenses', ['year' => 2026, 'month' => 1, 'electricity_bill' => 10]);
         $this->assertDatabaseMissing('monthly_expenses', ['year' => 2026, 'month' => 2]);
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'production_workbook_imported',
+            'model_type' => ProductionExcelImporter::class,
+            'user_id' => $admin->id,
+        ]);
     }
 
     public function test_production_commit_without_a_staged_workbook_is_rejected(): void

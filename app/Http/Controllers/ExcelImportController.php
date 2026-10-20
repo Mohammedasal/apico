@@ -11,6 +11,7 @@ use App\Models\StockSale;
 use App\Models\Supplier;
 use App\Services\AccountingPostingService;
 use App\Services\ApicoExcelImporter;
+use App\Services\AuditService;
 use App\Services\DatabaseBackupService;
 use App\Services\ProductionExcelImporter;
 use Carbon\Carbon;
@@ -52,7 +53,8 @@ class ExcelImportController extends Controller
         Request $request,
         ApicoExcelImporter $importer,
         AccountingPostingService $posting,
-        DatabaseBackupService $backups
+        DatabaseBackupService $backups,
+        AuditService $audit
     ) {
         $request->validate(['confirm' => ['accepted']]);
         $staging = $request->session()->get('sales_import_staging');
@@ -75,7 +77,14 @@ class ExcelImportController extends Controller
                 ], 503);
         }
 
-        $result = DB::transaction(function () use ($importer, $fullPath, $request, $posting) {
+        $before = [
+            'recycle_in_rows' => RecycleIn::count(),
+            'recycle_out_rows' => RecycleOut::count(),
+            'payment_rows' => Payment::count(),
+            'purchase_rows' => StockPurchase::count(),
+            'stock_sale_rows' => StockSale::count(),
+        ];
+        $result = DB::transaction(function () use ($importer, $fullPath, $request, $posting, $audit, $before, $backupPath) {
             $this->reverseImportedAccounting($posting, $request);
             $this->wipeImportedData();
             $userId = $request->user()->id;
@@ -86,6 +95,10 @@ class ExcelImportController extends Controller
                 $model::query()->update(['created_by' => $userId, 'updated_by' => null]);
             }
             $this->postImportedAccounting($posting, $request);
+            $audit->recordEvent('sales_workbook_imported', ApicoExcelImporter::class, null, $before, [
+                'result' => $result,
+                'backup' => $backupPath ? basename($backupPath) : null,
+            ]);
 
             return $result;
         });
@@ -135,7 +148,8 @@ class ExcelImportController extends Controller
     public function productionCommit(
         Request $request,
         ProductionExcelImporter $importer,
-        DatabaseBackupService $backups
+        DatabaseBackupService $backups,
+        AuditService $audit
     ) {
         $request->validate(['confirm' => ['accepted']]);
         $staging = $request->session()->get('production_import_staging');
@@ -155,7 +169,20 @@ class ExcelImportController extends Controller
                     'backupError' => __('The database backup failed verification. No records were changed.'),
                 ], 503);
         }
-        $result = DB::transaction(fn () => $importer->import($fullPath));
+        $before = [
+            'year' => $staging['result']['year'],
+            'production_days' => $staging['result']['existing_production_days'],
+            'monthly_expenses' => $staging['result']['existing_monthly_expenses'],
+        ];
+        $result = DB::transaction(function () use ($importer, $fullPath, $audit, $before, $backupPath) {
+            $result = $importer->import($fullPath);
+            $audit->recordEvent('production_workbook_imported', ProductionExcelImporter::class, null, $before, [
+                'result' => $result,
+                'backup' => $backupPath ? basename($backupPath) : null,
+            ]);
+
+            return $result;
+        });
         $request->session()->forget('production_import_staging');
 
         return redirect()

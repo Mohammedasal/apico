@@ -4,9 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\Supplier;
 use App\Services\ApicoCalculator;
+use App\Services\AuditService;
 use App\Services\SimpleXlsxExporter;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class SupplierController extends Controller
@@ -58,9 +60,12 @@ class SupplierController extends Controller
         return view('suppliers.form', ['supplier' => new Supplier(['status' => 'active'])]);
     }
 
-    public function store(Request $request)
+    public function store(Request $request, AuditService $audit)
     {
-        Supplier::create($this->validated($request));
+        DB::transaction(function () use ($request, $audit) {
+            $supplier = Supplier::create($this->validated($request));
+            $audit->record('supplier_created', $supplier, null, $supplier->toArray());
+        });
 
         return redirect()->route('suppliers.index')->with('status', 'Supplier created.');
     }
@@ -120,9 +125,13 @@ class SupplierController extends Controller
         return view('suppliers.form', compact('supplier'));
     }
 
-    public function update(Request $request, Supplier $supplier)
+    public function update(Request $request, Supplier $supplier, AuditService $audit)
     {
-        $supplier->update($this->validated($request));
+        $before = $supplier->toArray();
+        DB::transaction(function () use ($request, $supplier, $audit, $before) {
+            $supplier->update($this->validated($request));
+            $audit->record('supplier_updated', $supplier, $before, $supplier->fresh()->toArray());
+        });
 
         return redirect()->route('suppliers.show', $supplier)->with('status', 'Supplier updated.');
     }

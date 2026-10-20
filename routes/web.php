@@ -5,6 +5,7 @@ use App\Http\Controllers\AccountingPeriodController;
 use App\Http\Controllers\AccountingReportController;
 use App\Http\Controllers\AccountMappingController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\ChartOfAccountController;
 use App\Http\Controllers\ChequeInController;
 use App\Http\Controllers\ChequeOutController;
@@ -122,6 +123,7 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/settings', [SettingController::class, 'index'])->name('settings.index');
         Route::put('/settings', [SettingController::class, 'update'])->name('settings.update');
         Route::resource('users', UserController::class)->except(['show', 'destroy']);
+        Route::get('/audit-logs', [AuditLogController::class, 'index'])->name('audit-logs.index');
     });
 
     Route::prefix('accounting')->name('accounting.')->middleware('role:admin,accountant')->group(function () {

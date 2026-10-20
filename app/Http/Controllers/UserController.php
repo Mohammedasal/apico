@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Services\AuditService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class UserController extends Controller
@@ -20,9 +22,12 @@ class UserController extends Controller
         return view('users.form', ['user' => new User(['role' => 'viewer', 'is_active' => true])]);
     }
 
-    public function store(Request $request)
+    public function store(Request $request, AuditService $audit)
     {
-        User::create($this->validated($request));
+        DB::transaction(function () use ($request, $audit) {
+            $user = User::create($this->validated($request));
+            $audit->record('user_created', $user, null, $user->toArray());
+        });
 
         return redirect()->route('users.index')->with('status', 'User created.');
     }
@@ -32,7 +37,7 @@ class UserController extends Controller
         return view('users.form', compact('user'));
     }
 
-    public function update(Request $request, User $user)
+    public function update(Request $request, User $user, AuditService $audit)
     {
         $data = $this->validated($request, $user);
 
@@ -40,7 +45,11 @@ class UserController extends Controller
             unset($data['password']);
         }
 
-        $user->update($data);
+        $before = $user->toArray();
+        DB::transaction(function () use ($user, $data, $audit, $before) {
+            $user->update($data);
+            $audit->record('user_updated', $user, $before, $user->fresh()->toArray());
+        });
 
         return redirect()->route('users.index')->with('status', 'User updated.');
     }

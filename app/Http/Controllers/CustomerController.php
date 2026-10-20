@@ -4,9 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\Customer;
 use App\Services\ApicoCalculator;
+use App\Services\AuditService;
 use App\Services\SimpleXlsxExporter;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class CustomerController extends Controller
@@ -58,9 +60,12 @@ class CustomerController extends Controller
         return view('customers.form', ['customer' => new Customer]);
     }
 
-    public function store(Request $request)
+    public function store(Request $request, AuditService $audit)
     {
-        Customer::create($this->validated($request));
+        DB::transaction(function () use ($request, $audit) {
+            $customer = Customer::create($this->validated($request));
+            $audit->record('customer_created', $customer, null, $customer->toArray());
+        });
 
         return redirect()->route('customers.index')->with('status', 'Customer created.');
     }
@@ -119,9 +124,13 @@ class CustomerController extends Controller
         return view('customers.form', compact('customer'));
     }
 
-    public function update(Request $request, Customer $customer)
+    public function update(Request $request, Customer $customer, AuditService $audit)
     {
-        $customer->update($this->validated($request));
+        $before = $customer->toArray();
+        DB::transaction(function () use ($request, $customer, $audit, $before) {
+            $customer->update($this->validated($request));
+            $audit->record('customer_updated', $customer, $before, $customer->fresh()->toArray());
+        });
 
         return redirect()->route('customers.show', $customer)->with('status', 'Customer updated.');
     }

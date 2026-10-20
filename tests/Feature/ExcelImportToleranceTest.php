@@ -37,6 +37,11 @@ class ExcelImportToleranceTest extends TestCase
         $response = $this->post(route('imports.sales-sheet.commit'), ['confirm' => 1]);
         $response->assertRedirect(route('dashboard'))->assertSessionHasNoErrors();
         $this->assertDatabaseCount('recycle_ins', 1);
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'sales_workbook_imported',
+            'model_type' => ApicoExcelImporter::class,
+            'user_id' => $admin->id,
+        ]);
     }
 
     public function test_renamed_non_workbook_file_is_rejected_without_flushing_data(): void

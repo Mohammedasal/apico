@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\Setting;
+use App\Services\AuditService;
 use App\Services\ExpenseSourceService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -17,7 +19,7 @@ class SettingController extends Controller
         return view('settings.index', compact('settings'));
     }
 
-    public function update(Request $request)
+    public function update(Request $request, AuditService $audit)
     {
         $data = $request->validate([
             'currency' => ['required', 'string', 'max:10'],
@@ -42,9 +44,15 @@ class SettingController extends Controller
             }
         }
 
-        foreach ($data as $key => $value) {
-            Setting::updateOrCreate(['key' => $key], ['value' => $value]);
-        }
+        $before = Setting::whereIn('key', array_keys($data))->pluck('value', 'key')->all();
+        DB::transaction(function () use ($data, $before, $audit) {
+            foreach ($data as $key => $value) {
+                Setting::updateOrCreate(['key' => $key], ['value' => $value]);
+            }
+
+            $after = Setting::whereIn('key', array_keys($data))->pluck('value', 'key')->all();
+            $audit->recordEvent('settings_updated', Setting::class, null, $before, $after);
+        });
 
         return redirect()->route('settings.index')->with('status', 'Settings updated.');
     }

@@ -770,5 +770,16 @@
     "Moving weighted-average stock value as of the selected date.": "قيمة المخزون حسب المتوسط المرجح المتحرك حتى التاريخ المحدد.",
     "As of Date": "كما في تاريخ",
     "OK": "سليم",
-    "Negative stock": "مخزون سالب"
+    "Negative stock": "مخزون سالب",
+    "Audit Log": "سجل التدقيق",
+    "Recorded business and security changes with before and after values.": "تغييرات الأعمال والأمان المسجلة مع القيم قبل التعديل وبعده.",
+    "Action, record, or user": "الإجراء أو السجل أو المستخدم",
+    "User": "المستخدم",
+    "Time": "الوقت",
+    "Record": "السجل",
+    "Changes": "التغييرات",
+    "IP Address": "عنوان IP",
+    "View Changes": "عرض التغييرات",
+    "Before": "قبل",
+    "After": "بعد"
 }
