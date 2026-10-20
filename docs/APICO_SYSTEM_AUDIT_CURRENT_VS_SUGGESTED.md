@@ -2,6 +2,34 @@
 
 Audit date: 2026-10-17
 
+## Implementation Status: 2026-10-20
+
+Phase 3 work is isolated on branch `phase-3-safety-regression`. It has not been deployed to production. The original baseline tag remains `phase-2-local-baseline-2026-10-17`.
+
+Completed and regression-tested:
+
+- Active-user enforcement, centralized user capabilities, corrected accountant access, restricted cheque settlement, `Asia/Amman`, and production-safe environment defaults.
+- Bilingual route/role/page smoke coverage, including parameterized records and translation-key completeness.
+- Completed-period actual P&L, partial-period expense labeling, future-month exclusion, expense-source selection/reconciliation, and accounting source-coverage checks.
+- Stock profit row/summary reconciliation, explicit recycle output corrections, unclassified material isolation, negative-stock blocking, and an as-of-date inventory valuation report.
+- Supplier payment parity: filters, full-data sorting, repeat entry, export, controlled deletion, accounting reversal, and audit coverage.
+- Manual cheque settlement with derived due states and an idempotent daily alert command. No automatic bank settlement is performed.
+- General Ledger, Trial Balance, accounting P&L, Balance Sheet, AR/AP aging, Cash & Bank, customizable exports, and idempotent historical journal backfill.
+- Sales and production workbook staging, read-only preview, file hash verification, verified database backup, transactional commit, invalid-row continuation, and import audit provenance.
+- Imported recycle revenue variances are shown before confirmation, preserved with calculated and workbook totals, and timestamped as approved by the admin import action.
+- Verified MySQL/SQLite backup service, daily server backup script with checksums and retention, permanent predeploy backups, and an on-demand verified Artisan backup command.
+- Before/after audit records for operational transactions, supplier payments, customers, suppliers, users, production, monthly expenses, settings, cheque settlement, accounting actions, and committed imports. An admin-only searchable Audit Log page is available.
+- Automated release quality workflow with Composer and pnpm vulnerability audits. Current local regression: 151 tests and 839 assertions passing.
+
+Still open before release qualification:
+
+- Decide and document the conversion-cost allocation policy when production and stock-sale months differ.
+- Define process loss only after production inputs can be matched to processing batches; do not infer it from unrelated recycle-in/out totals.
+- Add duplicate-submission and stale-edit protection to sensitive financial forms.
+- Finish common filter/export contracts for remaining secondary pages and reconcile every filtered export total to its screen data.
+- Run desktop/mobile browser checks, Arabic RTL checks, print/PDF checks, and a production-like MySQL backup/restore drill.
+- Produce the final signed deployment checklist, production backup reference, rollback commit/tag, and migration rehearsal. No deployment is authorized yet.
+
 ## Purpose
 
 This document defines the current behavior, the proposed behavior, and the regression evidence required before deployment. Recommendations are not yet implemented unless explicitly marked as existing.
