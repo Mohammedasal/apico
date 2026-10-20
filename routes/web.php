@@ -72,6 +72,7 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/cheques-out/{chequeOut}/edit', [ChequeOutController::class, 'edit'])->middleware('role:admin,data_entry,accountant')->name('cheques-out.edit');
     Route::put('/cheques-out/{chequeOut}', [ChequeOutController::class, 'update'])->middleware('role:admin,data_entry,accountant')->name('cheques-out.update');
     Route::get('/cheques-in', [ChequeInController::class, 'index'])->middleware('role:admin,data_entry,accountant')->name('cheques-in.index');
+    Route::get('/cheques-in/export', [ChequeInController::class, 'export'])->middleware('role:admin,accountant')->name('cheques-in.export');
     Route::put('/cheques-in/{payment}', [ChequeInController::class, 'update'])->middleware('role:admin,accountant')->name('cheques-in.update');
 
     Route::resource('customers', CustomerController::class)->only(['create', 'store', 'edit', 'update'])->middleware('role:admin,data_entry');
