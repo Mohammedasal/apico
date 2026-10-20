@@ -63,11 +63,12 @@ class SupplierPaymentController extends Controller
         ]);
     }
 
-    public function store(Request $request, AccountingPostingService $posting)
+    public function store(Request $request, AccountingPostingService $posting, AuditService $audit)
     {
-        $payment = DB::transaction(function () use ($request, $posting) {
+        $payment = DB::transaction(function () use ($request, $posting, $audit) {
             $payment = SupplierPayment::create($this->validated($request) + ['created_by' => $request->user()->id]);
             $posting->postOperational($payment, $request->user());
+            $audit->record('supplier_payment_created', $payment, null, $payment->toArray());
 
             return $payment;
         });
@@ -89,16 +90,18 @@ class SupplierPaymentController extends Controller
         ]);
     }
 
-    public function update(Request $request, SupplierPayment $supplierPayment, AccountingPostingService $posting)
+    public function update(Request $request, SupplierPayment $supplierPayment, AccountingPostingService $posting, AuditService $audit)
     {
         if ($supplierPayment->payment_type === 'cheque' && $supplierPayment->cheque_status !== 'pending') {
             throw ValidationException::withMessages([
                 'cheque_status' => __('Settled cheques must be corrected from the cheque settlement page.'),
             ]);
         }
-        DB::transaction(function () use ($request, $supplierPayment, $posting) {
+        $before = $supplierPayment->toArray();
+        DB::transaction(function () use ($request, $supplierPayment, $posting, $audit, $before) {
             $supplierPayment->update($this->validated($request, $supplierPayment) + ['updated_by' => $request->user()->id]);
             $posting->repostOperational($supplierPayment->fresh(), $request->user());
+            $audit->record('supplier_payment_updated', $supplierPayment, $before, $supplierPayment->fresh()->toArray());
         });
 
         return redirect()->route('supplier-payments.index')->with('status', 'Supplier payment updated.');

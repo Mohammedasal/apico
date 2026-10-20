@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AuditLog;
 use App\Models\Customer;
 use App\Models\Material;
 use App\Models\RecycleIn;
@@ -304,6 +305,11 @@ class OperationValidationTest extends TestCase
         $this->assertSame(0.3, (float) $sale->purchase_cost_per_kg);
         $this->assertSame(600.0, (float) $sale->sales_value);
         $this->assertSame(300.0, (float) $sale->net_profit);
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'operation_created',
+            'model_type' => StockSale::class,
+            'model_id' => $sale->id,
+        ]);
     }
 
     public function test_stock_sale_calculates_total_from_weight_and_rate(): void
@@ -340,6 +346,28 @@ class OperationValidationTest extends TestCase
         $sale = StockSale::firstOrFail();
         $this->assertSame(170.0, (float) $sale->sales_value);
         $this->assertSame(0.122302, (float) $sale->selling_price_per_kg);
+    }
+
+    public function test_operational_edit_records_before_and_after_values(): void
+    {
+        $customer = Customer::create(['name' => 'Customer', 'status' => 'active']);
+        $record = RecycleIn::create([
+            'date' => '2026-01-01',
+            'customer_id' => $customer->id,
+            'weight_kg' => 100,
+            'rate_per_kg' => 0,
+            'total_amount' => 0,
+        ]);
+
+        $this->put(route('operations.update', ['module' => 'recycle-in', 'id' => $record->id]), [
+            'date' => '2026-01-01',
+            'customer_id' => $customer->id,
+            'weight_kg' => 125,
+        ])->assertRedirect(route('operations.index', 'recycle-in'));
+
+        $audit = AuditLog::where('action', 'operation_updated')->firstOrFail();
+        $this->assertSame('100.000', $audit->before['weight_kg']);
+        $this->assertSame('125.000', $audit->after['weight_kg']);
     }
 
     public function test_recycle_in_returns_to_create_form_and_shows_last_added_record(): void

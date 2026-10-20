@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AuditLog;
 use App\Models\StockPurchase;
 use App\Models\Supplier;
 use App\Models\SupplierPayment;
@@ -72,6 +73,12 @@ class SupplierPaymentWorkflowTest extends TestCase
         $payment = SupplierPayment::firstOrFail();
         $response->assertRedirect(route('supplier-payments.create'))
             ->assertSessionHas('recent_supplier_payment', $payment->id);
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'supplier_payment_created',
+            'model_type' => SupplierPayment::class,
+            'model_id' => $payment->id,
+            'user_id' => $admin->id,
+        ]);
         $this->actingAs($admin)->get(route('supplier-payments.create'))
             ->assertOk()
             ->assertSee('Repeat Supplier')
@@ -90,6 +97,25 @@ class SupplierPaymentWorkflowTest extends TestCase
 
         $this->actingAs($admin)->delete(route('supplier-payments.destroy', $payment))->assertRedirect(route('supplier-payments.index'));
         $this->assertDatabaseMissing('supplier_payments', ['id' => $payment->id]);
+    }
+
+    public function test_supplier_payment_edit_records_before_and_after_values(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $supplier = Supplier::create(['name' => 'Supplier', 'status' => 'active']);
+        $payment = SupplierPayment::create(['date' => '2026-04-01', 'supplier_id' => $supplier->id, 'amount' => 25, 'payment_type' => 'cash']);
+
+        $this->actingAs($admin)->put(route('supplier-payments.update', $payment), [
+            'date' => '2026-04-01',
+            'supplier_id' => $supplier->id,
+            'amount' => 30,
+            'payment_type' => 'cash',
+        ])->assertRedirect(route('supplier-payments.index'));
+
+        $audit = AuditLog::where('action', 'supplier_payment_updated')->firstOrFail();
+        $this->assertSame('25.000', $audit->before['amount']);
+        $this->assertSame('30.000', $audit->after['amount']);
+        $this->assertSame($admin->id, $audit->user_id);
     }
 
     public function test_viewer_can_export_filtered_supplier_payments(): void

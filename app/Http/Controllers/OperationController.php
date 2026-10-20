@@ -84,13 +84,14 @@ class OperationController extends Controller
         ]);
     }
 
-    public function store(string $module, Request $request, ApicoCalculator $calculator, AccountingPostingService $posting)
+    public function store(string $module, Request $request, ApicoCalculator $calculator, AccountingPostingService $posting, AuditService $audit)
     {
         $data = $this->validated($module, $request, $calculator);
         $data['created_by'] = $request->user()->id;
-        $record = DB::transaction(function () use ($module, $data, $request, $posting) {
+        $record = DB::transaction(function () use ($module, $data, $request, $posting, $audit) {
             $record = $this->module($module)['model']::create($data);
             $posting->postOperational($record, $request->user());
+            $audit->record('operation_created', $record, null, $record->toArray());
 
             return $record;
         });
@@ -116,7 +117,7 @@ class OperationController extends Controller
         ]);
     }
 
-    public function update(string $module, int $id, Request $request, ApicoCalculator $calculator, AccountingPostingService $posting)
+    public function update(string $module, int $id, Request $request, ApicoCalculator $calculator, AccountingPostingService $posting, AuditService $audit)
     {
         $record = $this->module($module)['model']::findOrFail($id);
         if ($record instanceof Payment && $record->payment_type === 'cheque' && $record->cheque_status !== 'pending') {
@@ -124,9 +125,11 @@ class OperationController extends Controller
         }
         $data = $this->validated($module, $request, $calculator, $id);
         $data['updated_by'] = $request->user()->id;
-        DB::transaction(function () use ($record, $data, $request, $posting) {
+        $before = $record->toArray();
+        DB::transaction(function () use ($record, $data, $request, $posting, $audit, $before) {
             $record->update($data);
             $posting->repostOperational($record->fresh(), $request->user());
+            $audit->record('operation_updated', $record, $before, $record->fresh()->toArray());
         });
 
         return redirect()->route('operations.index', $module)->with('status', __(':item updated.', ['item' => __($this->module($module)['title'])]));
