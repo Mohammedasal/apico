@@ -781,5 +781,7 @@
     "IP Address": "عنوان IP",
     "View Changes": "عرض التغييرات",
     "Before": "قبل",
-    "After": "بعد"
+    "After": "بعد",
+    "Recycle Amount Variances": "فروقات مبالغ التدوير",
+    "Absolute": "المطلق"
 }

@@ -54,6 +54,9 @@ class ApicoExcelImporter
                     'recycle_in_kg' => round($customers->sum('imported.recycle_in_kg'), 3),
                     'recycle_out_kg' => round($customers->sum('imported.recycle_out_kg'), 3),
                     'recycle_out_amount' => round($customers->sum('imported.recycle_out_amount'), 3),
+                    'recycle_out_variance_rows' => $customers->sum('imported.recycle_out_variance_rows'),
+                    'recycle_out_variance' => round($customers->sum('imported.recycle_out_variance'), 3),
+                    'recycle_out_absolute_variance' => round($customers->sum('imported.recycle_out_absolute_variance'), 3),
                     'payments' => round($customers->sum('imported.payments'), 3),
                     'stock_sales_amount' => round($customers->sum('imported.stock_sales_amount'), 3),
                 ],
@@ -202,6 +205,9 @@ class ApicoExcelImporter
             'payments' => round(array_sum(array_column($tables['payments'], 'amount')), 3),
             'stock_sales_kg' => round(array_sum(array_column($tables['stock_sales'], 'weight_kg')), 3),
             'stock_sales_amount' => round(array_sum(array_column($tables['stock_sales'], 'sales_value')), 3),
+            'recycle_out_variance_rows' => collect($tables['recycle_outs'])->whereNotIn('amount_variance', [0, 0.0, '0.000'])->count(),
+            'recycle_out_variance' => round(array_sum(array_column($tables['recycle_outs'], 'amount_variance')), 3),
+            'recycle_out_absolute_variance' => round(collect($tables['recycle_outs'])->sum(fn (array $row) => abs((float) $row['amount_variance'])), 3),
         ];
 
         return [

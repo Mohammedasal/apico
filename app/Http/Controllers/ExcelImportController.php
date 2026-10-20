@@ -94,6 +94,7 @@ class ExcelImportController extends Controller
             foreach ([StockSale::class, StockPurchase::class, Payment::class, RecycleOut::class, RecycleIn::class] as $model) {
                 $model::query()->update(['created_by' => $userId, 'updated_by' => null]);
             }
+            RecycleOut::where('amount_variance', '!=', 0)->update(['approved_at' => now()]);
             $this->postImportedAccounting($posting, $request);
             $audit->recordEvent('sales_workbook_imported', ApicoExcelImporter::class, null, $before, [
                 'result' => $result,

@@ -12,6 +12,7 @@
     <div class="card kpi-card"><div class="muted">{{ __('Recycle Out Rows') }}</div><div class="kpi">{{ $result['totals']['recycle_out_rows'] }}</div></div>
     <div class="card kpi-card"><div class="muted">{{ __('Payment Rows') }}</div><div class="kpi">{{ $result['totals']['payment_rows'] }}</div></div>
     <div class="card kpi-card"><div class="muted">{{ __('Stock Sale Rows') }}</div><div class="kpi">{{ $result['totals']['stock_sale_rows'] }}</div></div>
+    <div class="card kpi-card"><div class="muted">{{ __('Recycle Amount Variances') }}</div><div class="kpi">{{ $result['totals']['recycle_out_variance_rows'] }}</div><div class="muted">{{ number_format($result['totals']['recycle_out_variance'], 3) }} JOD | {{ __('Absolute') }} {{ number_format($result['totals']['recycle_out_absolute_variance'], 3) }} JOD</div></div>
     <div class="card kpi-card"><div class="muted">{{ __('Skipped Invalid Rows') }}</div><div class="kpi">{{ $result['skipped_rows'] }}</div></div>
 </div>
 

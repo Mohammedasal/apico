@@ -6,6 +6,7 @@ use App\Models\Customer;
 use App\Models\JournalEntry;
 use App\Models\Payment;
 use App\Models\RecycleIn;
+use App\Models\RecycleOut;
 use App\Models\Setting;
 use App\Models\User;
 use App\Services\AccountingPostingService;
@@ -33,10 +34,17 @@ class ExcelImportToleranceTest extends TestCase
         ]);
 
         $preview->assertOk()->assertSee('Sales Import Preview');
+        $preview->assertSee('Recycle Amount Variances')->assertSee('10.000 JOD');
         $this->assertDatabaseCount('recycle_ins', 0);
         $response = $this->post(route('imports.sales-sheet.commit'), ['confirm' => 1]);
         $response->assertRedirect(route('dashboard'))->assertSessionHasNoErrors();
         $this->assertDatabaseCount('recycle_ins', 1);
+        $this->assertDatabaseHas('recycle_outs', [
+            'total_amount' => 90,
+            'calculated_amount' => 100,
+            'amount_variance' => -10,
+        ]);
+        $this->assertNotNull(RecycleOut::firstOrFail()->approved_at);
         $this->assertDatabaseHas('audit_logs', [
             'action' => 'sales_workbook_imported',
             'model_type' => ApicoExcelImporter::class,
@@ -176,12 +184,12 @@ class ExcelImportToleranceTest extends TestCase
             1 => ['A' => 'Purchases'],
         ]));
         $zip->addFromString('xl/worksheets/sheet5.xml', $this->sheetXml([
-            4 => ['A' => 'Valid row', 'B' => '2026-07-22', 'C' => 100, 'N' => '2026-07-22', 'P' => 'Cash'],
+            4 => ['A' => 'Valid row', 'B' => '2026-07-22', 'C' => 100, 'G' => 'Variance row', 'H' => '2026-07-22', 'I' => 100, 'J' => 1, 'K' => 90, 'N' => '2026-07-22', 'P' => 'Cash'],
             5 => ['A' => 'Bad date row', 'B' => '7/23/20226', 'C' => 200],
         ]));
         $zip->addFromString('xl/worksheets/_rels/sheet5.xml.rels', $this->customerSheetRelationshipsXml());
         $zip->addFromString('xl/tables/table1.xml', $this->tableXml('Table1', 'A3:E5', 5));
-        $zip->addFromString('xl/tables/table2.xml', $this->tableXml('Table2', 'G3:L3', 6));
+        $zip->addFromString('xl/tables/table2.xml', $this->tableXml('Table2', 'G3:L4', 6));
         $zip->addFromString('xl/tables/table3.xml', $this->tableXml('Table3', 'N3:Q4', 4));
         $zip->addFromString('xl/tables/table4.xml', $this->tableXml('Table4', 'S3:X3', 6));
         $zip->close();
