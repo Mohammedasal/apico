@@ -15,6 +15,56 @@ class ProductionExcelImporter
 
     private ZipArchive $zip;
 
+    public function preview(string $path): array
+    {
+        $this->open($path);
+
+        try {
+            $sheet = $this->productionSheet();
+            $year = (int) $sheet['name'];
+            $cells = $this->sheetCells($sheet['path']);
+            $days = 0;
+            $productionKg = 0.0;
+            $expenseMonths = 0;
+            $expenses = 0.0;
+
+            foreach ($this->monthBlocks() as $month => $block) {
+                for ($row = 3; $row <= 33; $row++) {
+                    if (! checkdate($month, $row - 2, $year)) {
+                        continue;
+                    }
+
+                    $total = $this->number($cells[$block['shift_one'].$row] ?? null)
+                        + $this->number($cells[$block['shift_two'].$row] ?? null);
+                    if ($total > 0) {
+                        $days++;
+                        $productionKg += $total;
+                    }
+                }
+
+                $column = $block['summary'];
+                $monthExpenses = collect([37, 39, 41, 43, 45, 46, 47])
+                    ->sum(fn (int $row) => $this->number($cells[$column.$row] ?? null));
+                if ($monthExpenses > 0 || $this->number($cells[$column.'34'] ?? null) > 0) {
+                    $expenseMonths++;
+                    $expenses += $monthExpenses;
+                }
+            }
+
+            return [
+                'year' => $year,
+                'production_days' => $days,
+                'production_kg' => round($productionKg, 3),
+                'monthly_expenses' => $expenseMonths,
+                'total_expenses' => round($expenses, 3),
+                'existing_production_days' => ProductionDay::whereYear('date', $year)->count(),
+                'existing_monthly_expenses' => MonthlyExpense::where('year', $year)->count(),
+            ];
+        } finally {
+            $this->zip->close();
+        }
+    }
+
     public function import(string $path): array
     {
         $this->open($path);

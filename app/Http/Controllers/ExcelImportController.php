@@ -11,17 +11,19 @@ use App\Models\StockSale;
 use App\Models\Supplier;
 use App\Services\AccountingPostingService;
 use App\Services\ApicoExcelImporter;
+use App\Services\DatabaseBackupService;
 use App\Services\ProductionExcelImporter;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
+use Throwable;
 use ZipArchive;
 
 class ExcelImportController extends Controller
 {
-    public function store(Request $request, ApicoExcelImporter $importer, AccountingPostingService $posting)
+    public function store(Request $request, ApicoExcelImporter $importer)
     {
         $data = $request->validate([
             'sales_sheet' => $this->excelWorkbookRules(),
@@ -32,7 +34,46 @@ class ExcelImportController extends Controller
             'apico-sales-'.now()->format('Y-m-d-His').'.xlsx'
         );
         $fullPath = Storage::path($path);
-        $this->backupDatabase();
+        $result = $importer->preview($fullPath);
+        $dateIssues = $importer->dateIssues($fullPath);
+        $request->session()->put('sales_import_staging', [
+            'path' => $path,
+            'hash' => hash_file('sha256', $fullPath),
+            'user_id' => $request->user()->id,
+            'staged_at' => now()->toIso8601String(),
+            'result' => $result,
+            'date_issues' => $dateIssues,
+        ]);
+
+        return view('imports.sales-preview', compact('result', 'dateIssues'));
+    }
+
+    public function commit(
+        Request $request,
+        ApicoExcelImporter $importer,
+        AccountingPostingService $posting,
+        DatabaseBackupService $backups
+    ) {
+        $request->validate(['confirm' => ['accepted']]);
+        $staging = $request->session()->get('sales_import_staging');
+
+        abort_unless(is_array($staging) && ($staging['user_id'] ?? null) === $request->user()->id, 422, __('No staged sales import was found.'));
+        abort_if(Carbon::parse($staging['staged_at'])->lt(now()->subHours(2)), 422, __('The staged sales import has expired. Upload it again.'));
+        $fullPath = Storage::path($staging['path']);
+        abort_unless(Storage::exists($staging['path']) && hash_file('sha256', $fullPath) === $staging['hash'], 422, __('The staged workbook could not be verified.'));
+
+        try {
+            $backupPath = $backups->create('apico-before-sales-import');
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return response()
+                ->view('imports.sales-preview', [
+                    'result' => $staging['result'],
+                    'dateIssues' => $staging['date_issues'] ?? [],
+                    'backupError' => __('The database backup failed verification. No records were changed.'),
+                ], 503);
+        }
 
         $result = DB::transaction(function () use ($importer, $fullPath, $request, $posting) {
             $this->reverseImportedAccounting($posting, $request);
@@ -48,7 +89,7 @@ class ExcelImportController extends Controller
 
             return $result;
         });
-        $dateIssues = $importer->dateIssues($fullPath);
+        $dateIssues = $staging['date_issues'] ?? [];
         $skippedRows = (int) ($result['skipped_rows'] ?? 0);
         $status = 'Sales sheet imported. Existing imported transactions were flushed first.';
 
@@ -56,12 +97,15 @@ class ExcelImportController extends Controller
             $status .= " {$skippedRows} invalid transaction row(s) were skipped and listed for manual correction.";
         }
 
+        $request->session()->forget('sales_import_staging');
+
         return redirect()
             ->route('dashboard')
             ->with('status', $status)
             ->with('import_result', $result)
             ->with('import_issues', $result['issues'] ?? [])
-            ->with('date_issues', $dateIssues);
+            ->with('date_issues', $dateIssues)
+            ->with('backup_path', $backupPath ? basename($backupPath) : null);
     }
 
     public function production(Request $request, ProductionExcelImporter $importer)
@@ -75,9 +119,44 @@ class ExcelImportController extends Controller
             'apico-production-'.now()->format('Y-m-d-His').'.xlsx'
         );
 
-        $result = DB::transaction(function () use ($importer, $path) {
-            return $importer->import(Storage::path($path));
-        });
+        $fullPath = Storage::path($path);
+        $result = $importer->preview($fullPath);
+        $request->session()->put('production_import_staging', [
+            'path' => $path,
+            'hash' => hash_file('sha256', $fullPath),
+            'user_id' => $request->user()->id,
+            'staged_at' => now()->toIso8601String(),
+            'result' => $result,
+        ]);
+
+        return view('imports.production-preview', compact('result'));
+    }
+
+    public function productionCommit(
+        Request $request,
+        ProductionExcelImporter $importer,
+        DatabaseBackupService $backups
+    ) {
+        $request->validate(['confirm' => ['accepted']]);
+        $staging = $request->session()->get('production_import_staging');
+        abort_unless(is_array($staging) && ($staging['user_id'] ?? null) === $request->user()->id, 422, __('No staged production import was found.'));
+        abort_if(Carbon::parse($staging['staged_at'])->lt(now()->subHours(2)), 422, __('The staged production import has expired. Upload it again.'));
+        $fullPath = Storage::path($staging['path']);
+        abort_unless(Storage::exists($staging['path']) && hash_file('sha256', $fullPath) === $staging['hash'], 422, __('The staged workbook could not be verified.'));
+
+        try {
+            $backupPath = $backups->create('apico-before-production-import');
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return response()
+                ->view('imports.production-preview', [
+                    'result' => $staging['result'],
+                    'backupError' => __('The database backup failed verification. No records were changed.'),
+                ], 503);
+        }
+        $result = DB::transaction(fn () => $importer->import($fullPath));
+        $request->session()->forget('production_import_staging');
 
         return redirect()
             ->route('production.index', [
@@ -85,20 +164,8 @@ class ExcelImportController extends Controller
                 'month' => now()->month,
             ])
             ->with('status', 'Production sheet imported. P&L production and expenses were updated.')
-            ->with('production_import_result', $result);
-    }
-
-    private function backupDatabase(): void
-    {
-        $database = database_path('database.sqlite');
-
-        if (! File::exists($database)) {
-            return;
-        }
-
-        $directory = storage_path('app/backups');
-        File::ensureDirectoryExists($directory);
-        File::copy($database, $directory.'/apico-before-import-'.now()->format('Y-m-d-His').'.sqlite');
+            ->with('production_import_result', $result)
+            ->with('backup_path', $backupPath ? basename($backupPath) : null);
     }
 
     private function excelWorkbookRules(): array

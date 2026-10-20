@@ -56,10 +56,10 @@
 <div class="section-title">
     <h2>{{ __('Sales Sheet Upload') }}</h2>
 </div>
-<form class="filters" method="post" action="{{ route('imports.sales-sheet.store') }}" enctype="multipart/form-data" onsubmit="return confirm(@json(__('This will flush existing imported transactions and upload this workbook. Continue?')))">
+<form class="filters" method="post" action="{{ route('imports.sales-sheet.store') }}" enctype="multipart/form-data">
     @csrf
     <div><label>{{ __('Excel File') }}</label><input type="file" name="sales_sheet" accept=".xlsx" required>@error('sales_sheet')<div class="error">{{ $message }}</div>@enderror</div>
-    <div><button>{{ __('Flush & Import') }}</button></div>
+    <div><button>{{ __('Preview Import') }}</button></div>
 </form>
 @endif
 

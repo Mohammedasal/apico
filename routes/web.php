@@ -44,9 +44,15 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::post('/imports/sales-sheet', [ExcelImportController::class, 'store'])
         ->middleware('role:admin')
         ->name('imports.sales-sheet.store');
+    Route::post('/imports/sales-sheet/commit', [ExcelImportController::class, 'commit'])
+        ->middleware('role:admin')
+        ->name('imports.sales-sheet.commit');
     Route::post('/imports/production-sheet', [ExcelImportController::class, 'production'])
         ->middleware('role:admin')
         ->name('imports.production-sheet.store');
+    Route::post('/imports/production-sheet/commit', [ExcelImportController::class, 'productionCommit'])
+        ->middleware('role:admin')
+        ->name('imports.production-sheet.commit');
 
     Route::get('/production', [ProductionController::class, 'index'])
         ->middleware('role:admin,accountant')

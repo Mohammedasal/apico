@@ -4,8 +4,10 @@ namespace Tests\Feature;
 
 use App\Models\MonthlyExpense;
 use App\Models\ProductionDay;
+use App\Models\User;
 use App\Services\ProductionExcelImporter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
 use ZipArchive;
 
@@ -37,6 +39,48 @@ class ProductionExcelImporterTest extends TestCase
         $this->assertDatabaseMissing('production_days', ['date' => '2026-01-02 00:00:00']);
         $this->assertDatabaseHas('production_days', ['date' => '2025-01-02 00:00:00']);
         $this->assertDatabaseMissing('monthly_expenses', ['year' => 2026, 'month' => 2]);
+    }
+
+    public function test_production_upload_previews_without_changes_then_replaces_year_after_confirmation(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        ProductionDay::create(['date' => '2026-01-02', 'shift_one_kg' => 900, 'shift_two_kg' => 100]);
+        MonthlyExpense::create(['year' => 2026, 'month' => 2, 'rent' => 500]);
+        $path = $this->productionWorkbook([
+            'B3' => 100,
+            'C3' => 50,
+            'B34' => 0.15,
+            'B36' => 30,
+            'B37' => 10,
+        ]);
+
+        $preview = $this->actingAs($admin)->post(route('imports.production-sheet.store'), [
+            'production_sheet' => new UploadedFile($path, 'production.xlsx', 'application/zip', null, true),
+        ]);
+
+        $preview->assertOk()
+            ->assertSee('Production Import Preview')
+            ->assertSee('150.000 kg')
+            ->assertSee('Existing Production Days Replaced');
+        $this->assertDatabaseHas('production_days', ['date' => '2026-01-02 00:00:00']);
+        $this->assertDatabaseHas('monthly_expenses', ['year' => 2026, 'month' => 2]);
+
+        $commit = $this->post(route('imports.production-sheet.commit'), ['confirm' => 1]);
+
+        $commit->assertRedirect(route('production.index', ['year' => 2026, 'month' => now()->month]));
+        $this->assertDatabaseHas('production_days', ['date' => '2026-01-01 00:00:00', 'shift_one_kg' => 100, 'shift_two_kg' => 50]);
+        $this->assertDatabaseMissing('production_days', ['date' => '2026-01-02 00:00:00']);
+        $this->assertDatabaseHas('monthly_expenses', ['year' => 2026, 'month' => 1, 'electricity_bill' => 10]);
+        $this->assertDatabaseMissing('monthly_expenses', ['year' => 2026, 'month' => 2]);
+    }
+
+    public function test_production_commit_without_a_staged_workbook_is_rejected(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+
+        $this->actingAs($admin)
+            ->post(route('imports.production-sheet.commit'), ['confirm' => 1])
+            ->assertUnprocessable();
     }
 
     private function productionWorkbook(array $cells): string

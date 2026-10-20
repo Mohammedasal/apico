@@ -18,7 +18,7 @@
 <form class="filters" method="post" action="{{ route('imports.production-sheet.store') }}" enctype="multipart/form-data">
     @csrf
     <div><label>{{ __('Excel File') }}</label><input type="file" name="production_sheet" accept=".xlsx" required>@error('production_sheet')<div class="error">{{ $message }}</div>@enderror</div>
-    <div><button>{{ __('Import Production & Expenses') }}</button></div>
+    <div><button>{{ __('Preview Production Import') }}</button></div>
 </form>
 @endif
 

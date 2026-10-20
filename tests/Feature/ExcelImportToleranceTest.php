@@ -10,6 +10,7 @@ use App\Models\Setting;
 use App\Models\User;
 use App\Services\AccountingPostingService;
 use App\Services\ApicoExcelImporter;
+use App\Services\DatabaseBackupService;
 use Database\Seeders\AccountingSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -27,12 +28,14 @@ class ExcelImportToleranceTest extends TestCase
         $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
         $upload = new UploadedFile($path, 'sales-sheet.xlsx', 'application/zip', null, true);
 
-        $response = $this->actingAs($admin)->post(route('imports.sales-sheet.store'), [
+        $preview = $this->actingAs($admin)->post(route('imports.sales-sheet.store'), [
             'sales_sheet' => $upload,
         ]);
 
-        $response->assertRedirect(route('dashboard'));
-        $response->assertSessionHasNoErrors();
+        $preview->assertOk()->assertSee('Sales Import Preview');
+        $this->assertDatabaseCount('recycle_ins', 0);
+        $response = $this->post(route('imports.sales-sheet.commit'), ['confirm' => 1]);
+        $response->assertRedirect(route('dashboard'))->assertSessionHasNoErrors();
         $this->assertDatabaseCount('recycle_ins', 1);
     }
 
@@ -53,6 +56,43 @@ class ExcelImportToleranceTest extends TestCase
 
         $response->assertSessionHasErrors('sales_sheet');
         $this->assertDatabaseCount('recycle_ins', 1);
+    }
+
+    public function test_sales_commit_without_a_staged_workbook_is_rejected(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+
+        $this->actingAs($admin)
+            ->post(route('imports.sales-sheet.commit'), ['confirm' => 1])
+            ->assertUnprocessable();
+    }
+
+    public function test_failed_backup_cancels_sales_import_without_changing_records(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $customer = Customer::create(['name' => 'Existing', 'status' => 'active']);
+        RecycleIn::create([
+            'date' => '2026-07-01',
+            'customer_id' => $customer->id,
+            'weight_kg' => 10,
+            'rate_per_kg' => 0,
+            'total_amount' => 0,
+        ]);
+        $path = storage_path('app/test-failed-backup.xlsx');
+        $this->createWorkbook($path);
+        $this->actingAs($admin)->post(route('imports.sales-sheet.store'), [
+            'sales_sheet' => new UploadedFile($path, 'sales-sheet.xlsx', 'application/zip', null, true),
+        ])->assertOk();
+        $this->mock(DatabaseBackupService::class)
+            ->shouldReceive('create')
+            ->once()
+            ->andThrow(new \RuntimeException('Simulated backup failure'));
+
+        $response = $this->post(route('imports.sales-sheet.commit'), ['confirm' => 1]);
+
+        $response->assertServiceUnavailable()
+            ->assertSee('The database backup failed verification. No records were changed.');
+        $this->assertDatabaseHas('recycle_ins', ['customer_id' => $customer->id, 'weight_kg' => 10]);
     }
 
     public function test_invalid_row_is_reported_while_valid_rows_continue_importing(): void
@@ -100,10 +140,13 @@ class ExcelImportToleranceTest extends TestCase
         $path = storage_path('app/test-accounting-flush.xlsx');
         $this->createWorkbook($path);
 
-        $response = $this->actingAs($admin)->post(route('imports.sales-sheet.store'), [
+        $preview = $this->actingAs($admin)->post(route('imports.sales-sheet.store'), [
             'sales_sheet' => new UploadedFile($path, 'sales-sheet.xlsx', 'application/zip', null, true),
         ]);
 
+        $preview->assertOk();
+        $this->assertDatabaseHas('payments', ['id' => $payment->id]);
+        $response = $this->post(route('imports.sales-sheet.commit'), ['confirm' => 1]);
         $response->assertRedirect(route('dashboard'));
         $this->assertDatabaseMissing('payments', ['id' => $payment->id]);
         $this->assertSame('reversed', $originalEntry->fresh()->status);
