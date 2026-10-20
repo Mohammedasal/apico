@@ -66,6 +66,7 @@ Route::middleware(['auth', 'active'])->group(function () {
         ->name('production.expenses.store');
 
     Route::get('/cheques-out', [ChequeOutController::class, 'index'])->middleware('role:admin,data_entry,accountant')->name('cheques-out.index');
+    Route::get('/cheques-out/export', [ChequeOutController::class, 'export'])->middleware('role:admin,accountant')->name('cheques-out.export');
     Route::post('/cheques-out', [ChequeOutController::class, 'store'])->middleware('role:admin,data_entry,accountant')->name('cheques-out.store');
     Route::put('/cheques-out/supplier/{supplierPayment}', [ChequeOutController::class, 'updateSupplier'])->middleware('role:admin,accountant')->name('cheques-out.supplier.update');
     Route::put('/cheques-out/expense/{expense}', [ChequeOutController::class, 'updateExpense'])->middleware('role:admin,accountant')->name('cheques-out.expense.update');
