@@ -761,5 +761,14 @@
     "Replace this year production and expense rows with the previewed workbook?": "هل تريد استبدال سجلات الإنتاج والمصاريف لهذه السنة بملف الإكسل المعروض؟",
     "Backup & Import Production": "نسخ احتياطي واستيراد الإنتاج",
     "Preview Production Import": "معاينة استيراد الإنتاج",
-    "The database backup failed verification. No records were changed.": "فشل التحقق من النسخة الاحتياطية لقاعدة البيانات. لم يتم تغيير أي سجلات."
+    "The database backup failed verification. No records were changed.": "فشل التحقق من النسخة الاحتياطية لقاعدة البيانات. لم يتم تغيير أي سجلات.",
+    "Remaining Kg": "الوزن المتبقي كغم",
+    "Average Cost/Kg": "متوسط التكلفة لكل كغم",
+    "Inventory Value": "قيمة المخزون",
+    "Unclassified": "غير مصنف",
+    "Inventory Valuation": "تقييم المخزون",
+    "Moving weighted-average stock value as of the selected date.": "قيمة المخزون حسب المتوسط المرجح المتحرك حتى التاريخ المحدد.",
+    "As of Date": "كما في تاريخ",
+    "OK": "سليم",
+    "Negative stock": "مخزون سالب"
 }

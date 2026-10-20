@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Customer;
+use App\Models\Material;
 use App\Models\Payment;
 use App\Models\ProductionDay;
 use App\Models\RecycleIn;
@@ -40,7 +41,7 @@ class ApicoCalculator
     public function weightedAverageStockCost(?int $materialId = null, ?string $onDate = null, ?int $ignoreSaleId = null): float
     {
         $purchases = StockPurchase::query()
-            ->when($materialId, fn ($query) => $query->where('material_id', $materialId))
+            ->when($materialId !== null, fn ($query) => $query->where('material_id', $materialId), fn ($query) => $query->whereNull('material_id'))
             ->when($onDate, fn ($query) => $query->whereDate('date', '<=', $onDate))
             ->get(['date', 'weight_kg', 'total_cost'])
             ->map(fn (StockPurchase $purchase) => [
@@ -51,7 +52,7 @@ class ApicoCalculator
                 'amount' => (float) $purchase->total_cost,
             ]);
         $sales = StockSale::query()
-            ->when($materialId, fn ($query) => $query->where('material_id', $materialId))
+            ->when($materialId !== null, fn ($query) => $query->where('material_id', $materialId), fn ($query) => $query->whereNull('material_id'))
             ->when($onDate, fn ($query) => $query->whereDate('date', '<=', $onDate))
             ->when($ignoreSaleId, fn ($query) => $query->whereKeyNot($ignoreSaleId))
             ->get(['date', 'weight_kg'])
@@ -94,6 +95,91 @@ class ApicoCalculator
             ->sum('weight_kg');
 
         return round((float) $purchased - (float) $sold, 3);
+    }
+
+    public function remainingStockWeightForMaterial(?int $materialId): float
+    {
+        $materialScope = fn ($query) => $materialId === null
+            ? $query->whereNull('material_id')
+            : $query->where('material_id', $materialId);
+
+        $purchased = StockPurchase::query()->tap($materialScope)->sum('weight_kg');
+        $sold = StockSale::query()->tap($materialScope)->sum('weight_kg');
+
+        return round((float) $purchased - (float) $sold, 3);
+    }
+
+    public function stockInventoryValuation(?string $onDate = null): Collection
+    {
+        $purchases = StockPurchase::query()
+            ->when($onDate, fn ($query) => $query->whereDate('date', '<=', $onDate))
+            ->get(['id', 'date', 'material_id', 'weight_kg', 'total_cost'])
+            ->map(fn (StockPurchase $purchase) => [
+                'id' => $purchase->id,
+                'type' => 'purchase',
+                'date' => $purchase->date->toDateString(),
+                'sort' => 10,
+                'material_id' => $purchase->material_id,
+                'weight_kg' => (float) $purchase->weight_kg,
+                'amount' => (float) $purchase->total_cost,
+            ]);
+        $sales = StockSale::query()
+            ->when($onDate, fn ($query) => $query->whereDate('date', '<=', $onDate))
+            ->get(['id', 'date', 'material_id', 'weight_kg'])
+            ->map(fn (StockSale $sale) => [
+                'id' => $sale->id,
+                'type' => 'sale',
+                'date' => $sale->date->toDateString(),
+                'sort' => 20,
+                'material_id' => $sale->material_id,
+                'weight_kg' => (float) $sale->weight_kg,
+                'amount' => 0.0,
+            ]);
+        $inventory = [];
+
+        foreach ($purchases->merge($sales)->sortBy([['date', 'asc'], ['sort', 'asc'], ['id', 'asc']]) as $transaction) {
+            $key = $transaction['material_id'] ?? 0;
+            $inventory[$key] ??= [
+                'material_id' => $transaction['material_id'],
+                'purchased_kg' => 0.0,
+                'sold_kg' => 0.0,
+                'remaining_kg' => 0.0,
+                'value' => 0.0,
+            ];
+            $averageCost = $inventory[$key]['remaining_kg'] > 0
+                ? $inventory[$key]['value'] / $inventory[$key]['remaining_kg']
+                : 0.0;
+
+            if ($transaction['type'] === 'purchase') {
+                $inventory[$key]['purchased_kg'] += $transaction['weight_kg'];
+                $inventory[$key]['remaining_kg'] += $transaction['weight_kg'];
+                $inventory[$key]['value'] += $transaction['weight_kg'] < 0 && $transaction['amount'] == 0.0
+                    ? $transaction['weight_kg'] * $averageCost
+                    : $transaction['amount'];
+            } else {
+                $inventory[$key]['sold_kg'] += $transaction['weight_kg'];
+                $inventory[$key]['remaining_kg'] -= $transaction['weight_kg'];
+                $inventory[$key]['value'] -= $transaction['weight_kg'] * $averageCost;
+            }
+        }
+
+        $materials = Material::whereIn('id', collect($inventory)->pluck('material_id')->filter())->pluck('name', 'id');
+
+        return collect($inventory)->map(function (array $row) use ($materials) {
+            $remaining = round($row['remaining_kg'], 3);
+            $value = round($row['value'], 3);
+
+            return [
+                'material_id' => $row['material_id'],
+                'material' => $row['material_id'] ? ($materials[$row['material_id']] ?? '#'.$row['material_id']) : __('Unclassified'),
+                'purchased_kg' => round($row['purchased_kg'], 3),
+                'sold_kg' => round($row['sold_kg'], 3),
+                'remaining_kg' => $remaining,
+                'average_cost_per_kg' => $remaining > 0 ? round($value / $remaining, 6) : 0.0,
+                'inventory_value' => $value,
+                'status' => $remaining < -0.0005 ? 'Negative stock' : 'OK',
+            ];
+        })->sortBy('material')->values();
     }
 
     public function stockProfitSummary(?string $from = null, ?string $to = null): array

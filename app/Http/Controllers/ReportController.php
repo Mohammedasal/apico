@@ -158,6 +158,47 @@ class ReportController extends Controller
         return $exporter->download('stock-profit.xlsx', $this->exportHeaders($columns), $this->exportRows($rows, $columns));
     }
 
+    public function inventoryValuation(Request $request, ApicoCalculator $calculator)
+    {
+        $onDate = $request->input('on_date', now()->toDateString());
+        $search = trim((string) $request->input('q', ''));
+        $status = in_array($request->input('status'), ['OK', 'Negative stock'], true) ? $request->input('status') : null;
+        $rows = $this->inventoryValuationRows($calculator, $onDate, $search, $status);
+
+        return view('reports.inventory-valuation', [
+            'onDate' => $onDate,
+            'search' => $search,
+            'status' => $status,
+            'rows' => $rows,
+            'totalKg' => round((float) $rows->sum('remaining_kg'), 3),
+            'totalValue' => round((float) $rows->sum('inventory_value'), 3),
+            'columns' => $this->inventoryValuationColumns(),
+        ]);
+    }
+
+    public function inventoryValuationExport(Request $request, ApicoCalculator $calculator, SimpleXlsxExporter $exporter)
+    {
+        $onDate = $request->input('on_date', now()->toDateString());
+        $search = trim((string) $request->input('q', ''));
+        $status = in_array($request->input('status'), ['OK', 'Negative stock'], true) ? $request->input('status') : null;
+        $columns = $this->selectedColumns($this->inventoryValuationColumns(), $request);
+        $rows = $this->inventoryValuationRows($calculator, $onDate, $search, $status);
+
+        return $exporter->download(
+            'inventory-valuation-'.$onDate.'.xlsx',
+            $this->exportHeaders($columns),
+            $this->exportRows($rows, $columns)
+        );
+    }
+
+    private function inventoryValuationRows(ApicoCalculator $calculator, string $onDate, string $search, ?string $status): Collection
+    {
+        return $calculator->stockInventoryValuation($onDate)
+            ->when($search !== '', fn (Collection $rows) => $rows->filter(fn (array $row) => str_contains(mb_strtolower($row['material']), mb_strtolower($search))))
+            ->when($status, fn (Collection $rows) => $rows->where('status', $status))
+            ->values();
+    }
+
     private function stockProfitSales(string $from, string $to, string $search, ?int $customerId, ?int $materialId)
     {
         return StockSale::with(['customer', 'material'])
@@ -249,6 +290,19 @@ class ReportController extends Controller
             'sales_value' => __('Sales Value'),
             'net_profit' => __('Net Profit'),
             'notes' => __('Notes'),
+        ];
+    }
+
+    private function inventoryValuationColumns(): array
+    {
+        return [
+            'material' => __('Material'),
+            'purchased_kg' => __('Purchased Kg'),
+            'sold_kg' => __('Sold Kg'),
+            'remaining_kg' => __('Remaining Kg'),
+            'average_cost_per_kg' => __('Average Cost/Kg'),
+            'inventory_value' => __('Inventory Value'),
+            'status' => __('Status'),
         ];
     }
 

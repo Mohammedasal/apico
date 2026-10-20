@@ -127,6 +127,38 @@ class ApicoCalculatorTest extends TestCase
         $this->assertSame(2.333333, $calculator->weightedAverageStockCost($material->id, '2026-01-04'));
     }
 
+    public function test_unclassified_stock_cost_and_availability_do_not_mix_with_named_materials(): void
+    {
+        $calculator = app(ApicoCalculator::class);
+        $material = Material::create(['name' => 'HDPE', 'type' => 'stock', 'is_active' => true]);
+        StockPurchase::create(['date' => '2026-01-01', 'supplier_name' => 'Named', 'material_id' => $material->id, 'weight_kg' => 100, 'cost_per_kg' => 1, 'total_cost' => 100]);
+        StockPurchase::create(['date' => '2026-01-01', 'supplier_name' => 'Unclassified', 'material_id' => null, 'weight_kg' => 40, 'cost_per_kg' => 3, 'total_cost' => 120]);
+
+        $this->assertSame(3.0, $calculator->weightedAverageStockCost(null, '2026-01-02'));
+        $this->assertSame(40.0, $calculator->remainingStockWeightForMaterial(null));
+        $this->assertSame(100.0, $calculator->remainingStockWeightForMaterial($material->id));
+        $this->assertSame(140.0, $calculator->remainingStockWeight());
+    }
+
+    public function test_inventory_valuation_reconciles_weight_cost_value_and_negative_stock_by_material(): void
+    {
+        $calculator = app(ApicoCalculator::class);
+        $customer = Customer::create(['name' => 'Buyer', 'status' => 'active']);
+        $material = Material::create(['name' => 'PET', 'type' => 'stock', 'is_active' => true]);
+        StockPurchase::create(['date' => '2026-01-01', 'supplier_name' => 'A', 'material_id' => $material->id, 'weight_kg' => 100, 'cost_per_kg' => 1, 'total_cost' => 100]);
+        StockSale::create(['date' => '2026-01-02', 'customer_id' => $customer->id, 'material_id' => $material->id, 'weight_kg' => 40, 'selling_price_per_kg' => 2, 'sales_value' => 80, 'net_profit' => 40]);
+        StockSale::create(['date' => '2026-01-03', 'customer_id' => $customer->id, 'material_id' => null, 'weight_kg' => 10, 'selling_price_per_kg' => 2, 'sales_value' => 20, 'net_profit' => 20]);
+
+        $rows = $calculator->stockInventoryValuation('2026-01-03')->keyBy('material');
+
+        $this->assertSame(60.0, $rows['PET']['remaining_kg']);
+        $this->assertSame(1.0, $rows['PET']['average_cost_per_kg']);
+        $this->assertSame(60.0, $rows['PET']['inventory_value']);
+        $this->assertSame('OK', $rows['PET']['status']);
+        $this->assertSame(-10.0, $rows[__('Unclassified')]['remaining_kg']);
+        $this->assertSame('Negative stock', $rows[__('Unclassified')]['status']);
+    }
+
     public function test_stock_profit_summary_subtracts_weighted_average_cogs_and_conversion_cost(): void
     {
         $calculator = app(ApicoCalculator::class);

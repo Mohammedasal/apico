@@ -16,6 +16,7 @@
             request()->routeIs('reports.alerts*') => 'Alerts',
             request()->routeIs('reports.monthly*') => 'Monthly Report',
             request()->routeIs('reports.stock-profit*') => 'Stock Profit',
+            request()->routeIs('reports.inventory-valuation*') => 'Inventory Valuation',
             request()->routeIs('dashboards.stock-sales') => 'Stock Sales Dashboard',
             request()->routeIs('dashboards.recycle-out') => 'Recycle Out Dashboard',
             request()->routeIs('settings.*') => 'Settings',
@@ -221,6 +222,9 @@
             <a @class(['active' => request()->routeIs('dashboards.recycle-out')]) href="{{ route('dashboards.recycle-out') }}">{{ __('Recycle Out Dashboard') }}</a>
             <a @class(['active' => request()->routeIs('dashboards.stock-sales')]) href="{{ route('dashboards.stock-sales') }}">{{ __('Stock Sales Dashboard') }}</a>
             <a @class(['active' => request()->routeIs('reports.*')]) href="{{ $currentUser->canViewProfitAndLoss() ? route('reports.monthly') : route('reports.alerts') }}">{{ __('Reports') }}</a>
+            @if ($currentUser?->canViewProfitAndLoss())
+                <a @class(['active' => request()->routeIs('reports.inventory-valuation*')]) href="{{ route('reports.inventory-valuation') }}">{{ __('Inventory Valuation') }}</a>
+            @endif
         @endif
         @if ($currentUser?->canManageAccounting())
             <div class="nav-section">{{ __('Accounting') }}</div>

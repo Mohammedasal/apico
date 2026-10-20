@@ -114,6 +114,8 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/reports/monthly/export', [ReportController::class, 'monthlyExport'])->name('reports.monthly.export');
         Route::get('/reports/stock-profit', [ReportController::class, 'stockProfit'])->name('reports.stock-profit');
         Route::get('/reports/stock-profit/export', [ReportController::class, 'stockProfitExport'])->name('reports.stock-profit.export');
+        Route::get('/reports/inventory-valuation', [ReportController::class, 'inventoryValuation'])->name('reports.inventory-valuation');
+        Route::get('/reports/inventory-valuation/export', [ReportController::class, 'inventoryValuationExport'])->name('reports.inventory-valuation.export');
     });
 
     Route::middleware('role:admin')->group(function () {

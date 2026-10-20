@@ -435,7 +435,7 @@ class OperationController extends Controller
                 throw ValidationException::withMessages(['notes' => 'A note is required when selling price is zero.']);
             }
 
-            $available = $calculator->remainingStockWeight(filled($data['material_id'] ?? null) ? (int) $data['material_id'] : null);
+            $available = $calculator->remainingStockWeightForMaterial(filled($data['material_id'] ?? null) ? (int) $data['material_id'] : null);
             $currentWeight = $ignoreId ? (float) StockSale::findOrFail($ignoreId)->weight_kg : 0.0;
             $allowOverride = Setting::where('key', 'allow_stock_override')->value('value') === '1' || (bool) ($data['admin_override'] ?? false);
 

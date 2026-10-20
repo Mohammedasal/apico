@@ -266,6 +266,24 @@ class OperationValidationTest extends TestCase
         $response->assertSessionHasErrors('weight_kg');
     }
 
+    public function test_unclassified_stock_sale_cannot_consume_named_material_inventory(): void
+    {
+        $customer = Customer::create(['name' => 'Customer', 'status' => 'active']);
+        $material = Material::create(['name' => 'PET', 'type' => 'stock', 'is_active' => true]);
+        StockPurchase::create(['date' => '2026-01-01', 'supplier_name' => 'Supplier', 'material_id' => $material->id, 'weight_kg' => 100, 'cost_per_kg' => 1, 'total_cost' => 100]);
+
+        $response = $this->post(route('operations.store', 'stock-sales'), [
+            'date' => '2026-01-02',
+            'customer_id' => $customer->id,
+            'material_id' => null,
+            'weight_kg' => 1,
+            'selling_price_per_kg' => 2,
+        ]);
+
+        $response->assertSessionHasErrors('weight_kg');
+        $this->assertDatabaseCount('stock_sales', 0);
+    }
+
     public function test_stock_sale_uses_weighted_average_purchase_cost_and_returns_to_create_form(): void
     {
         $customer = Customer::create(['name' => 'Customer', 'status' => 'active']);
