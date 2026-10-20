@@ -17,6 +17,13 @@
     <div><label>{{ __('Status') }}</label><select name="status"><option value="">{{ __('All') }}</option><option value="posted" @selected(($filters['status'] ?? '') === 'posted')>{{ __('Posted') }}</option><option value="cancelled" @selected(($filters['status'] ?? '') === 'cancelled')>{{ __('Cancelled') }}</option></select></div>
     <div><button>{{ __('Filter') }}</button></div>
 </form>
+<form class="filters" method="get" action="{{ route('accounting.salary-advances.export') }}" style="margin-bottom:14px">
+    @foreach (request()->except(['page', 'columns']) as $key => $value) @if (is_scalar($value))<input type="hidden" name="{{ $key }}" value="{{ $value }}">@endif @endforeach
+    @foreach (['date' => __('Date'), 'employee' => __('Employee'), 'amount' => __('Amount'), 'payment_type' => __('Payment Type'), 'account' => __('Account'), 'reference' => __('Reference'), 'payroll_period' => __('Payroll Period'), 'status' => __('Status'), 'notes' => __('Notes'), 'created_by' => __('Created By')] as $column => $label)
+        <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" name="columns[]" value="{{ $column }}" checked> {{ $label }}</label>
+    @endforeach
+    <div><button>{{ __('Export Excel') }}</button></div>
+</form>
 
 <div class="table-wrap">
 <table>

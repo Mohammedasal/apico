@@ -10,6 +10,7 @@ use App\Models\SalaryAdvance;
 use App\Services\AccountingPostingService;
 use App\Services\AuditService;
 use App\Services\FormSubmissionGuard;
+use App\Services\SimpleXlsxExporter;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -23,11 +24,7 @@ class SalaryAdvanceController extends Controller
         $year = $request->integer('year') ?: now()->year;
         $month = $request->integer('month') ?: now()->month;
 
-        $query = SalaryAdvance::query()
-            ->whereYear('payment_date', $year)
-            ->whereMonth('payment_date', $month)
-            ->when($request->input('employee_id'), fn ($query, $employee) => $query->where('employee_id', $employee))
-            ->when($request->input('status'), fn ($query, $status) => $query->where('status', $status));
+        $query = $this->filteredQuery($year, $month, $request);
 
         $totalPosted = (float) (clone $query)->where('status', 'posted')->sum('amount');
         $advances = $query
@@ -43,6 +40,42 @@ class SalaryAdvanceController extends Controller
             'filters' => array_merge($filters, ['year' => $year, 'month' => $month]),
             'totalPosted' => $totalPosted,
         ]);
+    }
+
+    public function export(Request $request, SimpleXlsxExporter $exporter)
+    {
+        $year = $request->integer('year') ?: now()->year;
+        $month = $request->integer('month') ?: now()->month;
+        $availableColumns = $this->exportColumns();
+        $columns = collect($availableColumns)
+            ->only($request->input('columns', array_keys($availableColumns)))
+            ->all() ?: $availableColumns;
+        $rows = $this->filteredQuery($year, $month, $request)
+            ->with(['employee', 'payrollRun', 'cashAccount', 'bankAccount', 'creator'])
+            ->latest('payment_date')->latest('id')->get()
+            ->map(function (SalaryAdvance $advance) use ($columns) {
+                $row = [
+                    'date' => $advance->payment_date?->toDateString(),
+                    'employee' => $advance->employee?->localized_name,
+                    'amount' => number_format((float) $advance->amount, 3, '.', ''),
+                    'payment_type' => $advance->payment_type === 'cash' ? __('Cash') : __('Bank Transfer'),
+                    'account' => $advance->cashAccount?->localized_name ?? $advance->bankAccount?->localized_name ?? __('Default Account'),
+                    'reference' => $advance->reference,
+                    'payroll_period' => $advance->payrollRun ? sprintf('%04d-%02d', $advance->payrollRun->period_year, $advance->payrollRun->period_month) : __('Pending Month-End Payroll'),
+                    'status' => __(ucfirst($advance->status)),
+                    'notes' => $advance->notes,
+                    'created_by' => $advance->creator?->name ?? __('System'),
+                ];
+
+                return collect(array_keys($columns))->map(fn (string $column) => $row[$column] ?? '')->all();
+            })->all();
+
+        return $exporter->download(
+            sprintf('salary-advances-%04d-%02d.xlsx', $year, $month),
+            array_values($columns),
+            $rows,
+            [[__('Salary Advances'), sprintf('%04d-%02d', $year, $month)]]
+        );
     }
 
     public function create(Request $request)
@@ -126,5 +159,30 @@ class SalaryAdvanceController extends Controller
         });
 
         return back()->with('status', __('Salary advance cancelled.'));
+    }
+
+    private function filteredQuery(int $year, int $month, Request $request)
+    {
+        return SalaryAdvance::query()
+            ->whereYear('payment_date', $year)
+            ->whereMonth('payment_date', $month)
+            ->when($request->input('employee_id'), fn ($query, $employee) => $query->where('employee_id', $employee))
+            ->when($request->input('status'), fn ($query, $status) => $query->where('status', $status));
+    }
+
+    private function exportColumns(): array
+    {
+        return [
+            'date' => __('Date'),
+            'employee' => __('Employee'),
+            'amount' => __('Amount'),
+            'payment_type' => __('Payment Type'),
+            'account' => __('Account'),
+            'reference' => __('Reference'),
+            'payroll_period' => __('Payroll Period'),
+            'status' => __('Status'),
+            'notes' => __('Notes'),
+            'created_by' => __('Created By'),
+        ];
     }
 }

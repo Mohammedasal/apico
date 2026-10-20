@@ -12,6 +12,13 @@
     <div><label>{{ __('Source') }}</label><select name="source_module"><option value="">{{ __('All') }}</option><option value="operations" @selected(($filters['source_module'] ?? '') === 'operations')>{{ __('Operations') }}</option><option value="manual" @selected(($filters['source_module'] ?? '') === 'manual')>{{ __('Manual') }}</option></select></div>
     <div><button>{{ __('Filter') }}</button></div>
 </form>
+<form class="filters" method="get" action="{{ route('accounting.journals.export') }}" style="margin-bottom:14px">
+    @foreach (request()->except(['page', 'columns']) as $key => $value) @if (is_scalar($value))<input type="hidden" name="{{ $key }}" value="{{ $value }}">@endif @endforeach
+    @foreach (['date' => __('Date'), 'entry_no' => __('Entry No.'), 'memo' => __('Memo'), 'source' => __('Source'), 'debit' => __('Debit'), 'credit' => __('Credit'), 'status' => __('Status'), 'created_by' => __('Created By')] as $column => $label)
+        <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" name="columns[]" value="{{ $column }}" checked> {{ $label }}</label>
+    @endforeach
+    <div><button>{{ __('Export Excel') }}</button></div>
+</form>
 <div class="table-wrap">
 <table>
     <thead><tr><th>{{ __('Date') }}</th><th>{{ __('Entry No.') }}</th><th>{{ __('Memo') }}</th><th>{{ __('Source') }}</th><th>{{ __('Debit') }}</th><th>{{ __('Credit') }}</th><th>{{ __('Status') }}</th></tr></thead>

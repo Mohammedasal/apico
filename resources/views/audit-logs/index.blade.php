@@ -11,6 +11,13 @@
         <div><button>{{ __('Apply') }}</button></div>
     </form>
 </div>
+<form class="filters" method="get" action="{{ route('audit-logs.export') }}" style="margin-bottom:14px">
+    @foreach (request()->except(['page', 'columns']) as $key => $value) @if (is_scalar($value))<input type="hidden" name="{{ $key }}" value="{{ $value }}">@endif @endforeach
+    @foreach (['time' => __('Time'), 'user' => __('User'), 'action' => __('Action'), 'record' => __('Record'), 'before' => __('Before'), 'after' => __('After'), 'ip_address' => __('IP Address')] as $column => $label)
+        <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" name="columns[]" value="{{ $column }}" checked> {{ $label }}</label>
+    @endforeach
+    <div><button>{{ __('Export Excel') }}</button></div>
+</form>
 <div class="table-wrap">
 <table>
     <thead><tr><th>{{ __('Time') }}</th><th>{{ __('User') }}</th><th>{{ __('Action') }}</th><th>{{ __('Record') }}</th><th>{{ __('Changes') }}</th><th>{{ __('IP Address') }}</th></tr></thead>

@@ -127,6 +127,7 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::put('/settings', [SettingController::class, 'update'])->name('settings.update');
         Route::resource('users', UserController::class)->except(['show', 'destroy']);
         Route::get('/audit-logs', [AuditLogController::class, 'index'])->name('audit-logs.index');
+        Route::get('/audit-logs/export', [AuditLogController::class, 'export'])->name('audit-logs.export');
     });
 
     Route::prefix('accounting')->name('accounting.')->middleware('role:admin,accountant')->group(function () {
@@ -137,6 +138,7 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::resource('expense-categories', ExpenseCategoryController::class)->except(['show', 'destroy']);
         Route::resource('employees', EmployeeController::class)->except(['show', 'destroy']);
         Route::get('/salary-advances', [SalaryAdvanceController::class, 'index'])->name('salary-advances.index');
+        Route::get('/salary-advances/export', [SalaryAdvanceController::class, 'export'])->name('salary-advances.export');
         Route::get('/salary-advances/create', [SalaryAdvanceController::class, 'create'])->name('salary-advances.create');
         Route::post('/salary-advances', [SalaryAdvanceController::class, 'store'])->name('salary-advances.store');
         Route::post('/salary-advances/{advance}/cancel', [SalaryAdvanceController::class, 'cancel'])->name('salary-advances.cancel');
@@ -147,6 +149,7 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::post('/payroll/{payroll}/pay-social-security', [PayrollController::class, 'paySocialSecurity'])->name('payroll.pay-social-security');
         Route::post('/payroll/{payroll}/cancel', [PayrollController::class, 'cancel'])->name('payroll.cancel');
         Route::get('/journals', [JournalEntryController::class, 'index'])->name('journals.index');
+        Route::get('/journals/export', [JournalEntryController::class, 'export'])->name('journals.export');
         Route::get('/journals/create', [JournalEntryController::class, 'create'])->name('journals.create');
         Route::post('/journals', [JournalEntryController::class, 'store'])->name('journals.store');
         Route::get('/journals/{journal}', [JournalEntryController::class, 'show'])->name('journals.show');
