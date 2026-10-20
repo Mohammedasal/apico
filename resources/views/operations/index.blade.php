@@ -80,6 +80,16 @@
     <div><button>{{ __('Search') }}</button></div>
     <div><a class="button" href="{{ route('operations.index', $module) }}">{{ __('Clear') }}</a></div>
 </form>
+<div class="section-title"><h2>{{ __('Export to Excel') }}</h2></div>
+<form class="filters" method="get" action="{{ route('operations.export', $module) }}" style="margin-bottom:14px">
+    @foreach (request()->except(['page', 'columns']) as $key => $value)
+        @if (is_scalar($value))<input type="hidden" name="{{ $key }}" value="{{ $value }}">@endif
+    @endforeach
+    @foreach ($exportColumns as $key => $label)
+        <label class="check"><input type="checkbox" name="columns[]" value="{{ $key }}" checked> {{ $label }}</label>
+    @endforeach
+    <div><button>{{ __('Export Excel') }}</button></div>
+</form>
 @php
     $sortUrl = function (string $column) use ($module, $filters) {
         $query = request()->except('page');

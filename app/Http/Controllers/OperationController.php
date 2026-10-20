@@ -17,6 +17,7 @@ use App\Services\AccountingPostingService;
 use App\Services\ApicoCalculator;
 use App\Services\AuditService;
 use App\Services\FormSubmissionGuard;
+use App\Services\SimpleXlsxExporter;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -60,7 +61,33 @@ class OperationController extends Controller
             'materials' => $module !== 'payments'
                 ? Material::orderBy('name')->get()
                 : collect(),
+            'exportColumns' => $this->exportColumns($module),
         ]);
+    }
+
+    public function export(string $module, Request $request, SimpleXlsxExporter $exporter)
+    {
+        $config = $this->module($module);
+        $filters = $this->filters($module, $request);
+        $query = $config['model']::query()->with($this->relations($module));
+        $this->applyFilters($module, $query, $filters);
+        $this->applySorting($module, $query, $filters);
+        $availableColumns = $this->exportColumns($module);
+        $columns = collect($availableColumns)
+            ->only($request->input('columns', array_keys($availableColumns)))
+            ->all() ?: $availableColumns;
+        $rows = $query->get()->map(function ($record) use ($module, $columns) {
+            $row = $this->exportRow($module, $record);
+
+            return collect(array_keys($columns))->map(fn (string $column) => $row[$column] ?? '')->all();
+        })->all();
+
+        return $exporter->download(
+            $module.'-'.now()->format('Y-m-d').'.xlsx',
+            array_values($columns),
+            $rows,
+            [[__($config['title']), ($filters['from'] ?: __('Beginning')).' '.__('to').' '.($filters['to'] ?: now()->toDateString())]]
+        );
     }
 
     public function create(string $module)
@@ -303,6 +330,91 @@ class OperationController extends Controller
             'stock-sales' => 'sales_value',
             default => null,
         };
+    }
+
+    private function exportColumns(string $module): array
+    {
+        $columns = ['date' => __('Date')];
+        $columns[$module === 'stock-purchases' ? 'supplier' : 'customer'] = $module === 'stock-purchases' ? __('Supplier') : __('Customer');
+
+        if ($module !== 'payments') {
+            $columns += [
+                'material' => __('Material'),
+                'weight_kg' => __('Weight Kg'),
+            ];
+        }
+        if ($module === 'recycle-out') {
+            $columns += [
+                'transaction_type' => __('Transaction Type'),
+                'recycled_out_kg' => __('Recycled Out Kg'),
+                'waste_kg' => __('Waste Kg'),
+                'non_recycled_kg' => __('Non-Recycled Kg'),
+                'rate_per_kg' => __('Rate/Kg'),
+                'calculated_amount' => __('Calculated Amount'),
+                'amount_variance' => __('Variance'),
+            ];
+        }
+        if ($module === 'payments') {
+            $columns += [
+                'payment_type' => __('Payment Type'),
+                'reference_no' => __('Reference'),
+                'cheque_due_date' => __('Cheque Due Date'),
+                'cheque_status' => __('Cheque Status'),
+            ];
+        }
+        if ($module === 'stock-sales') {
+            $columns['rate_per_kg'] = __('Selling Price/Kg');
+        }
+        if ($module === 'stock-purchases') {
+            $columns['rate_per_kg'] = __('Cost/Kg');
+        }
+        $columns += [
+            'amount' => __('Amount'),
+            'notes' => __('Notes'),
+            'created_at' => __('Created'),
+            'created_by' => __('Created By'),
+            'updated_at' => __('Edited'),
+            'updated_by' => __('Edited By'),
+        ];
+
+        return $columns;
+    }
+
+    private function exportRow(string $module, $record): array
+    {
+        return [
+            'date' => $record->date?->toDateString(),
+            'customer' => $record->customer?->name,
+            'supplier' => $record->supplier?->name ?? $record->supplier_name ?? null,
+            'material' => $record->material?->name ?? __('Unclassified'),
+            'weight_kg' => isset($record->weight_kg) ? number_format((float) $record->weight_kg, 3, '.', '') : '',
+            'transaction_type' => isset($record->transaction_type) ? __(ucfirst($record->transaction_type)) : '',
+            'recycled_out_kg' => isset($record->recycled_out_kg) ? number_format((float) $record->recycled_out_kg, 3, '.', '') : '',
+            'waste_kg' => isset($record->waste_kg) ? number_format((float) $record->waste_kg, 3, '.', '') : '',
+            'non_recycled_kg' => isset($record->non_recycled_kg) ? number_format((float) $record->non_recycled_kg, 3, '.', '') : '',
+            'rate_per_kg' => number_format((float) match ($module) {
+                'stock-sales' => $record->selling_price_per_kg,
+                'stock-purchases' => $record->cost_per_kg,
+                default => $record->rate_per_kg ?? 0,
+            }, 6, '.', ''),
+            'calculated_amount' => isset($record->calculated_amount) ? number_format((float) $record->calculated_amount, 3, '.', '') : '',
+            'amount_variance' => isset($record->amount_variance) ? number_format((float) $record->amount_variance, 3, '.', '') : '',
+            'payment_type' => isset($record->payment_type) ? __(ucwords(str_replace('_', ' ', $record->payment_type))) : '',
+            'reference_no' => $record->reference_no ?? '',
+            'cheque_due_date' => $record->cheque_due_date?->toDateString(),
+            'cheque_status' => isset($record->cheque_status) ? __(ucfirst($record->cheque_status)) : '',
+            'amount' => number_format((float) match ($module) {
+                'payments' => $record->amount,
+                'stock-purchases' => $record->total_cost,
+                'stock-sales' => $record->sales_value,
+                default => $record->total_amount,
+            }, 3, '.', ''),
+            'notes' => $record->notes,
+            'created_at' => $record->created_at?->format('Y-m-d H:i:s'),
+            'created_by' => $record->creator?->name ?? __('Import/System'),
+            'updated_at' => $record->updated_by ? $record->updated_at?->format('Y-m-d H:i:s') : '',
+            'updated_by' => $record->editor?->name ?? '',
+        ];
     }
 
     private function validated(string $module, Request $request, ApicoCalculator $calculator, ?int $ignoreId = null): array

@@ -92,6 +92,7 @@ Route::middleware(['auth', 'active'])->group(function () {
         ->name('operations.')
         ->group(function () {
             Route::get('/', [OperationController::class, 'index'])->name('index');
+            Route::get('/export', [OperationController::class, 'export'])->name('export');
             Route::get('/create', [OperationController::class, 'create'])->middleware('role:admin,data_entry')->name('create');
             Route::post('/', [OperationController::class, 'store'])->middleware('role:admin,data_entry')->name('store');
             Route::get('/{id}/edit', [OperationController::class, 'edit'])->middleware('role:admin,data_entry')->name('edit');
