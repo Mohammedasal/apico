@@ -19,16 +19,13 @@ Completed and regression-tested:
 - Imported recycle revenue variances are shown before confirmation, preserved with calculated and workbook totals, and timestamped as approved by the admin import action.
 - Verified MySQL/SQLite backup service, daily server backup script with checksums and retention, permanent predeploy backups, and an on-demand verified Artisan backup command.
 - Before/after audit records for operational transactions, supplier payments, customers, suppliers, users, production, monthly expenses, settings, cheque settlement, accounting actions, and committed imports. An admin-only searchable Audit Log page is available.
-- Automated release quality workflow with Composer and pnpm vulnerability audits. Current local regression: 151 tests and 839 assertions passing.
+- Automated release quality workflow with Composer and pnpm vulnerability audits. Current local regression: 161 tests and 915 assertions passing. Phase 3 local release qualification is recorded in `docs/PHASE_3_RELEASE_QUALIFICATION.md`.
 
 Still open before release qualification:
 
 - Decide and document the conversion-cost allocation policy when production and stock-sale months differ.
 - Define process loss only after production inputs can be matched to processing batches; do not infer it from unrelated recycle-in/out totals.
-- Add duplicate-submission and stale-edit protection to sensitive financial forms.
-- Finish common filter/export contracts for remaining secondary pages and reconcile every filtered export total to its screen data.
-- Run desktop/mobile browser checks, Arabic RTL checks, print/PDF checks, and a production-like MySQL backup/restore drill.
-- Produce the final signed deployment checklist, production backup reference, rollback commit/tag, and migration rehearsal. No deployment is authorized yet.
+- Supply the production predeployment backup reference and obtain release-owner/operator signatures. The local checklist, rollback procedure, browser/RTL/print evidence, MySQL backup/restore drill, and migration rehearsal are complete. No deployment is authorized yet.
 
 ## Purpose
 
