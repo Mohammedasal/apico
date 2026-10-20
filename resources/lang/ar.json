@@ -710,5 +710,21 @@
     "Variance": "الفرق",
     "Imported Amount Variance": "فرق المبلغ المستورد",
     "Normal output weights cannot be negative.": "لا يمكن أن تكون أوزان الإنتاج العادي سالبة.",
-    "A reason is required for returns and corrections.": "السبب مطلوب للمرتجعات والتصحيحات."
+    "A reason is required for returns and corrections.": "السبب مطلوب للمرتجعات والتصحيحات.",
+    "P&L Expense Source": "مصدر مصاريف الأرباح والخسائر",
+    "Posted Accounting Journals": "القيود المحاسبية المرحلة",
+    "Cutover by Date": "التحويل حسب التاريخ",
+    "Expense Cutover Date": "تاريخ تحويل مصدر المصاريف",
+    "Required for cutover mode and must be the first day of a month.": "مطلوب لوضع التحويل ويجب أن يكون أول يوم من الشهر.",
+    "The cutover date must be the first day of a month.": "يجب أن يكون تاريخ التحويل أول يوم من الشهر.",
+    "Expense Source Reconciliation": "مطابقة مصادر المصاريف",
+    "Expense Reconciliation": "مطابقة المصاريف",
+    "Compare factory monthly expenses with posted accounting expense journals before changing the P&L source.": "قارن مصاريف المصنع الشهرية مع قيود المصاريف المحاسبية المرحلة قبل تغيير مصدر الأرباح والخسائر.",
+    "Selected Source": "المصدر المختار",
+    "Cutover": "التحويل",
+    "Total Difference": "إجمالي الفرق",
+    "Selected P&L Expense": "مصاريف الأرباح والخسائر المختارة",
+    "Matched": "متطابق",
+    "Needs Reconciliation": "يحتاج إلى مطابقة",
+    "No expense data for this year.": "لا توجد بيانات مصاريف لهذه السنة."
 }

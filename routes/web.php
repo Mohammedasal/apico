@@ -152,6 +152,8 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/reports/payables-aging/export', [AccountingReportController::class, 'payablesAgingExport'])->name('reports.payables-aging.export');
         Route::get('/reports/cash-bank', [AccountingReportController::class, 'cashBank'])->name('reports.cash-bank');
         Route::get('/reports/cash-bank/export', [AccountingReportController::class, 'cashBankExport'])->name('reports.cash-bank.export');
+        Route::get('/reports/expense-reconciliation', [AccountingReportController::class, 'expenseReconciliation'])->name('reports.expense-reconciliation');
+        Route::get('/reports/expense-reconciliation/export', [AccountingReportController::class, 'expenseReconciliationExport'])->name('reports.expense-reconciliation.export');
     });
 
     Route::prefix('accounting')->name('accounting.')->middleware('role:admin')->group(function () {

@@ -60,6 +60,10 @@ class AccountingSeeder extends Seeder
                 ['key' => 'monthly_expense_source'],
                 ['value' => 'legacy_monthly_expenses', 'description' => 'Source for monthly factory expense totals']
             );
+            Setting::firstOrCreate(
+                ['key' => 'expense_cutover_date'],
+                ['value' => null, 'description' => 'First month calculated from posted accounting expense journals']
+            );
         });
     }
 

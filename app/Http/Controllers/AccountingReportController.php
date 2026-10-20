@@ -8,6 +8,7 @@ use App\Models\ChartOfAccount;
 use App\Models\JournalEntry;
 use App\Models\JournalEntryLine;
 use App\Services\AgingReportService;
+use App\Services\ExpenseSourceService;
 use App\Services\SimpleXlsxExporter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -15,6 +16,33 @@ use Illuminate\Validation\Rule;
 
 class AccountingReportController extends Controller
 {
+    public function expenseReconciliation(Request $request, ExpenseSourceService $expenses)
+    {
+        return view('accounting.reports.expense-reconciliation', $this->expenseReconciliationData($request, $expenses) + [
+            'exportColumns' => $this->expenseReconciliationColumns(),
+        ]);
+    }
+
+    public function expenseReconciliationExport(
+        Request $request,
+        ExpenseSourceService $expenses,
+        SimpleXlsxExporter $exporter
+    ) {
+        $report = $this->expenseReconciliationData($request, $expenses);
+        $columns = $this->selectedColumns($request, $this->expenseReconciliationColumns());
+
+        return $exporter->download(
+            'expense-reconciliation-'.$report['year'].'.xlsx',
+            array_values($columns),
+            $this->arrayExportRows($report['rows'], $columns),
+            [
+                [__('Expense Source Reconciliation'), (string) $report['year']],
+                [__('Selected Source'), __($report['source_label'])],
+                [__('Total Difference'), $this->decimal($report['totals']['difference'])],
+            ]
+        );
+    }
+
     public function receivablesAging(Request $request, AgingReportService $aging)
     {
         return $this->agingReport($request, $aging->customers($this->asOf($request)), 'receivables');
@@ -586,6 +614,46 @@ class AccountingReportController extends Controller
             'name' => __('Account'),
             'type' => __('Type'),
             'balance' => __('Balance'),
+        ];
+    }
+
+    private function expenseReconciliationData(Request $request, ExpenseSourceService $expenses): array
+    {
+        $validated = $request->validate(['year' => ['nullable', 'integer', 'between:2000,2100']]);
+        $year = (int) ($validated['year'] ?? now()->year);
+        $rows = $expenses->reconciliation($year)
+            ->filter(fn (array $row) => $row['legacy'] != 0.0 || $row['accounting'] != 0.0)
+            ->values();
+        $source = $expenses->source();
+        $sourceLabel = match ($source) {
+            ExpenseSourceService::ACCOUNTING => 'Posted Accounting Journals',
+            ExpenseSourceService::CUTOVER => 'Cutover by Date',
+            default => 'Legacy Monthly Expenses',
+        };
+
+        return [
+            'year' => $year,
+            'rows' => $rows,
+            'source' => $source,
+            'source_label' => $sourceLabel,
+            'cutover' => $expenses->cutoverDate()?->toDateString(),
+            'totals' => [
+                'legacy' => round((float) $rows->sum('legacy'), 3),
+                'accounting' => round((float) $rows->sum('accounting'), 3),
+                'difference' => round((float) $rows->sum('difference'), 3),
+                'selected' => round((float) $rows->sum('selected'), 3),
+            ],
+        ];
+    }
+
+    private function expenseReconciliationColumns(): array
+    {
+        return [
+            'month' => __('Month'),
+            'legacy' => __('Legacy Monthly Expenses'),
+            'accounting' => __('Posted Accounting Journals'),
+            'difference' => __('Difference'),
+            'selected' => __('Selected P&L Expense'),
         ];
     }
 }

@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\Customer;
-use App\Models\MonthlyExpense;
 use App\Models\Payment;
 use App\Models\ProductionDay;
 use App\Models\RecycleIn;
@@ -17,6 +16,8 @@ use Illuminate\Support\Collection;
 
 class ApicoCalculator
 {
+    public function __construct(private readonly ExpenseSourceService $expenseSource) {}
+
     public function recycleTotal(float $weightKg, float $ratePerKg): float
     {
         return round($weightKg * $ratePerKg, 3);
@@ -210,7 +211,7 @@ class ApicoCalculator
             return 0;
         }
 
-        $expenses = (float) (MonthlyExpense::where('year', $year)->where('month', $month)->first()?->total_expenses ?? 0);
+        $expenses = $this->expenseSource->total($start->toDateString(), $end->toDateString());
 
         return round($expenses / ($productionKg / 1000), 3);
     }
@@ -266,50 +267,12 @@ class ApicoCalculator
 
     public function operatingExpenses(?string $from = null, ?string $to = null): float
     {
-        $start = $from ? Carbon::parse($from)->startOfDay() : $this->firstActivityDate()?->startOfDay();
-        $end = $to ? Carbon::parse($to)->startOfDay() : $this->lastActivityDate()?->startOfDay();
-
-        if (! $start || ! $end || $end->lt($start)) {
-            return 0;
-        }
-
-        return (float) MonthlyExpense::where(function ($query) use ($start) {
-            $query->where('year', '>', $start->year)
-                ->orWhere(fn ($query) => $query->where('year', $start->year)->where('month', '>=', $start->month));
-        })
-            ->where(function ($query) use ($end) {
-                $query->where('year', '<', $end->year)
-                    ->orWhere(fn ($query) => $query->where('year', $end->year)->where('month', '<=', $end->month));
-            })
-            ->get()
-            ->sum(function (MonthlyExpense $expense) use ($start, $end) {
-                $monthStart = Carbon::create($expense->year, $expense->month, 1)->startOfDay();
-                $monthEnd = $monthStart->copy()->endOfMonth()->startOfDay();
-                $overlapStart = $start->copy()->max($monthStart);
-                $overlapEnd = $end->copy()->min($monthEnd);
-
-                if ($overlapEnd->lt($overlapStart)) {
-                    return 0;
-                }
-
-                $coveredDays = $overlapStart->diffInDays($overlapEnd) + 1;
-
-                return $expense->total_expenses * ($coveredDays / $monthStart->daysInMonth);
-            });
+        return $this->expenseSource->total($from, $to);
     }
 
     private function expenseBasis(?string $from, ?string $to): string
     {
-        if (! $from || ! $to) {
-            return 'activity_period_prorated';
-        }
-
-        $start = Carbon::parse($from);
-        $end = Carbon::parse($to);
-
-        return $start->isStartOfMonth() && $end->isSameDay($end->copy()->endOfMonth())
-            ? 'completed_months'
-            : 'calendar_day_proration';
+        return $this->expenseSource->basis($from, $to);
     }
 
     public function stockMaterialCogs(?string $from = null, ?string $to = null): float

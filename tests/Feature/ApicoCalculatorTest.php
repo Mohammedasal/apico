@@ -201,7 +201,7 @@ class ApicoCalculatorTest extends TestCase
 
         $this->assertSame(150.0, $summary['operating_expenses']);
         $this->assertSame(-150.0, $summary['actual_profit_loss']);
-        $this->assertSame('calendar_day_proration', $summary['expense_basis']);
+        $this->assertSame('legacy_monthly_expenses:partial_period', $summary['expense_basis']);
     }
 
     public function test_supplier_statement_tracks_purchases_payments_and_running_balance(): void
