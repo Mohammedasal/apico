@@ -146,6 +146,7 @@ class ChequeInController extends Controller
             });
 
         $column = match ($filters['sort']) {
+            'due_date' => 'cheque_due_date',
             'payment_date' => 'date',
             default => $filters['sort'],
         };

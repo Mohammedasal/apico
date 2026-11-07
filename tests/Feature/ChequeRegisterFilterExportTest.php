@@ -28,6 +28,10 @@ class ChequeRegisterFilterExportTest extends TestCase
         $this->cheque($included, '2026-07-10', 125, 'IN-125');
         $this->cheque($excluded, '2026-08-10', 500, 'OUT-500');
 
+        $this->actingAs($admin)->get(route('cheques-in.index'))
+            ->assertOk()
+            ->assertSeeInOrder(['Included Cheque Customer', 'Excluded Cheque Customer']);
+
         $filters = [
             'from' => '2026-07-01',
             'to' => '2026-07-31',
