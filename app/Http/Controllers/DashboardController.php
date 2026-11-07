@@ -37,6 +37,7 @@ class DashboardController extends Controller
             'remaining_jod' => $calculator->customerBalance($customer),
         ]);
         $receivables = $customerBalances->sum(fn (array $customer) => max(0, $customer['remaining_jod']));
+        $remainingRecycleStock = $customerBalances->sum('remaining_kg');
         $productionDays = $productionEntries->filter(fn (ProductionDay $day) => $day->total_kg > 0)->count();
         $wasteKg = RecycleOut::query()->where('transaction_type', 'output')->tap($dateRange)->sum('waste_kg');
         $stockProfit = $calculator->stockProfitSummary($from, $to);
@@ -59,6 +60,7 @@ class DashboardController extends Controller
                 ->values(),
             'customerCount' => $customers->count(),
             'receivables' => round((float) $receivables, 3),
+            'remainingRecycleStock' => round((float) $remainingRecycleStock, 3),
             'recycleInKg' => RecycleIn::query()->tap($dateRange)->sum('weight_kg'),
             'recycleOutKg' => $recycleOutKg,
             'productionKg' => $productionKg,

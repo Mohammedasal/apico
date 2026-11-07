@@ -8,7 +8,7 @@
         <div class="muted">{{ __('Statement from :from to :to', ['from' => $statement['from'], 'to' => $statement['to']]) }}</div>
     </div>
     <div class="no-print">
-        <button type="button" onclick="window.print()">{{ __('Print / Save PDF') }}</button>
+        <button type="button" onclick="printStatement()">{{ __('Print / Save PDF') }}</button>
         <button type="button" onclick="printLedgerOnly()">{{ __('Print Ledger Only') }}</button>
         @if (auth()->user()?->canWriteOperationalData())
             <a class="button" href="{{ route('customers.edit', $customer) }}">{{ __('Edit') }}</a>
@@ -126,12 +126,28 @@
     </table>
 </div>
 <script>
-    function printLedgerOnly() {
-        document.body.classList.add('print-ledger-only');
-        window.print();
-        setTimeout(function () {
+    function printWithTitle(title, ledgerOnly) {
+        const originalTitle = document.title;
+        const restore = function () {
+            document.title = originalTitle;
             document.body.classList.remove('print-ledger-only');
-        }, 500);
+        };
+
+        document.title = title;
+        if (ledgerOnly) {
+            document.body.classList.add('print-ledger-only');
+        }
+        window.addEventListener('afterprint', restore, { once: true });
+        window.print();
+        setTimeout(restore, 1000);
+    }
+
+    function printStatement() {
+        printWithTitle(@js($statementPrintTitle), false);
+    }
+
+    function printLedgerOnly() {
+        printWithTitle(@js($ledgerPrintTitle), true);
     }
 </script>
 @endsection

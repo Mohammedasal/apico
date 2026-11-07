@@ -75,12 +75,10 @@ class SupplierController extends Controller
 
     public function show(Supplier $supplier, Request $request, ApicoCalculator $calculator)
     {
+        $from = $request->input('from', now()->startOfMonth()->toDateString());
+        $to = $request->input('to', now()->toDateString());
         $search = trim((string) $request->input('q', ''));
-        $statement = $calculator->supplierStatement(
-            $supplier,
-            $request->input('from', now()->startOfMonth()->toDateString()),
-            $request->input('to', now()->toDateString())
-        );
+        $statement = $calculator->supplierStatement($supplier, $from, $to);
         $statement['transactions'] = $this->filterStatementRows($statement['transactions'], $search);
 
         return view('suppliers.show', [
@@ -90,7 +88,9 @@ class SupplierController extends Controller
             'exportColumns' => $this->statementColumns(),
             'statementTitle' => __('Supplier Statement'),
             'statementGeneratedAt' => Carbon::today()->translatedFormat('F j, Y'),
-            'title' => $this->statementTitle($supplier->name),
+            'statementPrintTitle' => $this->printTitle(__('Supplier Statement'), $supplier->name, $from, $to),
+            'ledgerPrintTitle' => $this->printTitle(__('Running Ledger'), $supplier->name, $from, $to),
+            'title' => $this->printTitle(__('Supplier Statement'), $supplier->name, $from, $to),
         ]);
     }
 
@@ -189,9 +189,19 @@ class SupplierController extends Controller
         ];
     }
 
-    private function statementTitle(string $name): string
+    private function printTitle(string $document, string $name, string $from, string $to): string
     {
-        return __('Supplier Statement').' - '.$name.' - '.Carbon::today()->translatedFormat('F j, Y');
+        return $document.' - '.$name.' - '.$this->statementPeriodLabel($from, $to);
+    }
+
+    private function statementPeriodLabel(string $from, string $to): string
+    {
+        $start = Carbon::parse($from);
+        $end = Carbon::parse($to);
+
+        return $start->isSameMonth($end)
+            ? $start->translatedFormat('F Y')
+            : $start->translatedFormat('M Y').' - '.$end->translatedFormat('M Y');
     }
 
     private function statementFilename(string $name): string

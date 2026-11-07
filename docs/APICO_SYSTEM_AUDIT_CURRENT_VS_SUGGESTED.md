@@ -19,7 +19,7 @@ Completed and regression-tested:
 - Imported recycle revenue variances are shown before confirmation, preserved with calculated and workbook totals, and timestamped as approved by the admin import action.
 - Verified MySQL/SQLite backup service, daily server backup script with checksums and retention, permanent predeploy backups, and an on-demand verified Artisan backup command.
 - Before/after audit records for operational transactions, supplier payments, customers, suppliers, users, production, monthly expenses, settings, cheque settlement, accounting actions, and committed imports. An admin-only searchable Audit Log page is available.
-- Automated release quality workflow with Composer and pnpm vulnerability audits. Current local regression: 161 tests and 915 assertions passing. Phase 3 local release qualification is recorded in `docs/PHASE_3_RELEASE_QUALIFICATION.md`.
+- Automated release quality workflow with Composer and pnpm vulnerability audits. Current local regression: 163 tests and 924 assertions passing. Phase 3 local release qualification is recorded in `docs/PHASE_3_RELEASE_QUALIFICATION.md`.
 
 Still open before release qualification:
 

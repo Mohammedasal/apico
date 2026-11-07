@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Customer;
 use App\Models\ProductionDay;
+use App\Models\RecycleIn;
 use App\Models\RecycleOut;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -62,5 +63,36 @@ class DashboardProductionTest extends TestCase
         $this->assertSame('2026-09-30', $response->viewData('to'));
         $this->assertSame(1000.0, $response->viewData('productionKg'));
         $this->assertCount(9, $response->viewData('monthlyPerformance'));
+    }
+
+    public function test_dashboard_shows_total_remaining_recycle_stock_across_customers(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $customer = Customer::create([
+            'name' => 'Recycle Customer',
+            'opening_weight_balance_kg' => 50,
+            'status' => 'active',
+        ]);
+
+        RecycleIn::create([
+            'date' => '2026-10-01',
+            'customer_id' => $customer->id,
+            'weight_kg' => 300,
+        ]);
+        RecycleOut::create([
+            'date' => '2026-10-02',
+            'customer_id' => $customer->id,
+            'weight_kg' => 100,
+            'recycled_out_kg' => 100,
+            'waste_kg' => 0,
+            'non_recycled_kg' => 0,
+            'rate_per_kg' => 0.1,
+            'total_amount' => 10,
+        ]);
+
+        $response = $this->actingAs($admin)->get(route('dashboard'));
+
+        $response->assertOk()->assertSee('Remaining Recycle Stock Kg');
+        $this->assertSame(250.0, $response->viewData('remainingRecycleStock'));
     }
 }

@@ -15,7 +15,7 @@ The Phase 3 code and migration are qualified for a release checkpoint. Productio
 
 | Gate | Result | Evidence |
 | --- | --- | --- |
-| Full Laravel regression | PASS | 161 tests, 915 assertions, 0 failures on PHP 8.4.21 and Laravel 13.38.0. |
+| Full Laravel regression | PASS | 163 tests, 924 assertions, 0 failures on PHP 8.4.21 and Laravel 13.38.0. |
 | Production asset build | PASS | `pnpm run build`; Vite 8.3.4 completed successfully. The optional Fontaine optimization notice is non-blocking. |
 | Frontend dependency audit | PASS | `pnpm audit --audit-level=high`: no known vulnerabilities. |
 | PHP dependency audit | PASS after lock refresh | The original lockfile exposed 26 advisories across six packages. Dependencies were refreshed within `composer.json` constraints; `composer audit --locked` then reported no advisories. |
@@ -23,6 +23,8 @@ The Phase 3 code and migration are qualified for a release checkpoint. Productio
 | Mobile browser | PASS | 390x844 checks on the same eight pages. No document-level horizontal overflow; wide tables remain inside horizontal-scroll containers. |
 | Arabic RTL | PASS | Dashboard, Customers, Monthly Report, and Trial Balance report `lang=ar`, `dir=rtl`, translated titles/headings, and no document-level overflow at 390x844. |
 | Print/PDF layout | PASS with browser limitation noted | Customer Statement rendered with five tables, a dedicated running-ledger print area, both print actions, and an active `@media print` rule. Print CSS uses A4 landscape, hides navigation/forms/no-print controls, avoids row splitting, and supports ledger-only output. The in-app qualification browser does not expose its native print-preview surface, so no PDF file was saved. |
+| Dashboard recycling balance | PASS | Dashboard shows total remaining recycling stock as customer opening kg plus recycle-in minus recycle-out, independently from purchased stock inventory. |
+| Statement print filenames | PASS | Customer and supplier statement and ledger-only print titles include the counterparty name and selected month. |
 | MySQL backup/restore | PASS | `apico_local` was dumped with `--single-transaction --routines --triggers`, verified non-empty, SHA-256 recorded, and restored to isolated database `apico_qualification_20261020`. Source and restore matched at 36 tables, 4 users, and 1,215 customers. |
 | Migration rehearsal | PASS | Pending migration `2026_10_17_000001_classify_recycle_out_adjustments` ran successfully on the restored clone only. The working `apico_local` database was not migrated. |
 | Production safety | PASS | No production connection, backup, migration, tag push, or deployment was performed. |

@@ -88,7 +88,9 @@ class CustomerController extends Controller
             'exportColumns' => $this->statementColumns(),
             'statementTitle' => __('Customer Statement'),
             'statementGeneratedAt' => Carbon::today()->translatedFormat('F j, Y'),
-            'title' => $this->statementTitle($customer->name),
+            'statementPrintTitle' => $this->printTitle(__('Customer Statement'), $customer->name, $from, $to),
+            'ledgerPrintTitle' => $this->printTitle(__('Running Ledger'), $customer->name, $from, $to),
+            'title' => $this->printTitle(__('Customer Statement'), $customer->name, $from, $to),
         ]);
     }
 
@@ -198,9 +200,19 @@ class CustomerController extends Controller
         ];
     }
 
-    private function statementTitle(string $name): string
+    private function printTitle(string $document, string $name, string $from, string $to): string
     {
-        return __('Customer Statement').' - '.$name.' - '.Carbon::today()->translatedFormat('F j, Y');
+        return $document.' - '.$name.' - '.$this->statementPeriodLabel($from, $to);
+    }
+
+    private function statementPeriodLabel(string $from, string $to): string
+    {
+        $start = Carbon::parse($from);
+        $end = Carbon::parse($to);
+
+        return $start->isSameMonth($end)
+            ? $start->translatedFormat('F Y')
+            : $start->translatedFormat('M Y').' - '.$end->translatedFormat('M Y');
     }
 
     private function statementFilename(string $name): string

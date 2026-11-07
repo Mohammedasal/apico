@@ -94,13 +94,32 @@ class ReportController extends Controller
 
     public function customerStatement(Customer $customer, Request $request, ApicoCalculator $calculator)
     {
-        $statement = $calculator->customerStatement(
-            $customer,
-            $request->input('from', now()->startOfMonth()->toDateString()),
-            $request->input('to', now()->toDateString())
-        );
+        $from = $request->input('from', now()->startOfMonth()->toDateString());
+        $to = $request->input('to', now()->toDateString());
+        $statement = $calculator->customerStatement($customer, $from, $to);
 
-        return view('customers.show', compact('customer', 'statement'));
+        return view('customers.show', [
+            'customer' => $customer,
+            'statement' => $statement,
+            'search' => '',
+            'exportColumns' => [],
+            'statementTitle' => __('Customer Statement'),
+            'statementGeneratedAt' => Carbon::today()->translatedFormat('F j, Y'),
+            'statementPrintTitle' => $this->statementPrintTitle(__('Customer Statement'), $customer->name, $from, $to),
+            'ledgerPrintTitle' => $this->statementPrintTitle(__('Running Ledger'), $customer->name, $from, $to),
+            'title' => $this->statementPrintTitle(__('Customer Statement'), $customer->name, $from, $to),
+        ]);
+    }
+
+    private function statementPrintTitle(string $document, string $name, string $from, string $to): string
+    {
+        $start = Carbon::parse($from);
+        $end = Carbon::parse($to);
+        $period = $start->isSameMonth($end)
+            ? $start->translatedFormat('F Y')
+            : $start->translatedFormat('M Y').' - '.$end->translatedFormat('M Y');
+
+        return $document.' - '.$name.' - '.$period;
     }
 
     public function stockProfit(Request $request, ApicoCalculator $calculator)

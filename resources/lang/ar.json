@@ -777,6 +777,8 @@
     "Preview Production Import": "معاينة استيراد الإنتاج",
     "The database backup failed verification. No records were changed.": "فشل التحقق من النسخة الاحتياطية لقاعدة البيانات. لم يتم تغيير أي سجلات.",
     "Remaining Kg": "الوزن المتبقي كغم",
+    "Remaining Recycle Stock Kg": "مخزون التدوير المتبقي كغم",
+    "Customer opening kg + recycle in - recycle out": "رصيد العميل الافتتاحي كغم + إدخال التدوير - إخراج التدوير",
     "Average Cost/Kg": "متوسط التكلفة لكل كغم",
     "Inventory Value": "قيمة المخزون",
     "Unclassified": "غير مصنف",

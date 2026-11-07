@@ -2,7 +2,7 @@
 <html lang="{{ app()->getLocale() }}" dir="{{ app()->getLocale() === 'ar' ? 'rtl' : 'ltr' }}">
 <head>
     @php
-        $pageTitle = ($config['title'] ?? null) ?: match (true) {
+        $pageTitle = ($title ?? null) ?: (($config['title'] ?? null) ?: match (true) {
             request()->routeIs('dashboard') => 'Dashboard',
             request()->routeIs('production.*') => 'Production / P&L',
             request()->routeIs('cheques-in.*') => 'Cheques In',
@@ -41,7 +41,7 @@
             request()->routeIs('accounting.periods.*') => 'Accounting Periods',
             request()->routeIs('accounting.dashboard') => 'Accounting Dashboard',
             default => null,
-        };
+        });
     @endphp
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
