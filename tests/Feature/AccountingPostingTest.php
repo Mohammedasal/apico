@@ -162,6 +162,88 @@ class AccountingPostingTest extends TestCase
         ]);
     }
 
+    public function test_negative_stock_purchase_and_sale_reverse_the_original_accounting_direction(): void
+    {
+        $supplier = Supplier::create(['name' => 'Supplier', 'status' => 'active']);
+        $customer = Customer::create(['name' => 'Customer', 'status' => 'active']);
+        $material = Material::create(['name' => 'PET', 'type' => 'stock', 'is_active' => true]);
+        StockPurchase::create([
+            'date' => '2026-01-01',
+            'supplier_id' => $supplier->id,
+            'supplier_name' => $supplier->name,
+            'material_id' => $material->id,
+            'weight_kg' => 1000,
+            'cost_per_kg' => 0.3,
+            'total_cost' => 300,
+        ]);
+        $purchaseCorrection = StockPurchase::create([
+            'date' => '2026-01-02',
+            'supplier_id' => $supplier->id,
+            'supplier_name' => $supplier->name,
+            'material_id' => $material->id,
+            'weight_kg' => -200,
+            'cost_per_kg' => 0.3,
+            'total_cost' => -60,
+        ]);
+        $saleCorrection = StockSale::create([
+            'date' => '2026-01-03',
+            'customer_id' => $customer->id,
+            'material_id' => $material->id,
+            'weight_kg' => -100,
+            'selling_price_per_kg' => 1.2,
+            'sales_value' => -120,
+            'purchase_cost_per_kg' => 0.3,
+            'granulation_cost_per_kg' => 0,
+            'net_profit' => -90,
+        ]);
+
+        $this->posting->postOperational($purchaseCorrection, $this->admin);
+        $this->posting->postOperational($saleCorrection, $this->admin);
+
+        $this->assertDatabaseHas('journal_entry_lines', [
+            'account_id' => $this->posting->mappedAccount('inventory_default')->id,
+            'credit' => 60,
+        ]);
+        $this->assertDatabaseHas('journal_entry_lines', [
+            'account_id' => $this->posting->mappedAccount('accounts_payable_control')->id,
+            'debit' => 60,
+        ]);
+        $this->assertDatabaseHas('journal_entry_lines', [
+            'account_id' => $this->posting->mappedAccount('stock_sales_income')->id,
+            'debit' => 120,
+        ]);
+        $this->assertDatabaseHas('journal_entry_lines', [
+            'account_id' => $this->posting->mappedAccount('accounts_receivable_control')->id,
+            'credit' => 120,
+        ]);
+        $this->assertDatabaseHas('journal_entry_lines', [
+            'account_id' => $this->posting->mappedAccount('stock_material_cogs')->id,
+            'credit' => 30,
+        ]);
+        $this->assertDatabaseHas('journal_entry_lines', [
+            'account_id' => $this->posting->mappedAccount('inventory_default')->id,
+            'debit' => 30,
+        ]);
+    }
+
+    public function test_zero_value_stock_purchase_does_not_create_a_journal(): void
+    {
+        $supplier = Supplier::create(['name' => 'Supplier', 'status' => 'active']);
+        $purchase = StockPurchase::create([
+            'date' => '2026-01-01',
+            'supplier_id' => $supplier->id,
+            'supplier_name' => $supplier->name,
+            'weight_kg' => 100,
+            'cost_per_kg' => 0,
+            'total_cost' => 0,
+        ]);
+
+        $entries = $this->posting->postOperational($purchase, $this->admin);
+
+        $this->assertCount(0, $entries);
+        $this->assertDatabaseCount('journal_entries', 0);
+    }
+
     public function test_edit_reverses_and_reposts_source_without_duplicate_active_entry(): void
     {
         $customer = Customer::create(['name' => 'Customer', 'status' => 'active']);

@@ -6,6 +6,8 @@ use App\Models\Customer;
 use App\Models\JournalEntry;
 use App\Models\Payment;
 use App\Models\Setting;
+use App\Models\StockPurchase;
+use App\Models\Supplier;
 use App\Models\User;
 use Database\Seeders\AccountingSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -31,6 +33,15 @@ class AccountingBackfillTest extends TestCase
             'customer_id' => $customer->id,
             'amount' => 20,
             'payment_type' => 'cash',
+        ]);
+        $supplier = Supplier::create(['name' => 'Supplier', 'status' => 'active']);
+        StockPurchase::create([
+            'date' => '2026-01-06',
+            'supplier_id' => $supplier->id,
+            'supplier_name' => $supplier->name,
+            'weight_kg' => 100,
+            'cost_per_kg' => 0,
+            'total_cost' => 0,
         ]);
 
         $this->artisan('apico:accounting-backfill', ['--from' => '2026-01-01', '--to' => '2026-12-31'])

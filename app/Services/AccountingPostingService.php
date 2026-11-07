@@ -703,6 +703,11 @@ class AccountingPostingService
     private function postCustomerPayment(Payment $source, ?User $user): Collection
     {
         $amount = abs(round((float) $source->amount, 3));
+
+        if ($amount < 0.0005) {
+            return collect();
+        }
+
         $destination = $this->paymentAssetAccount($source);
         $ar = $this->mappedAccount('accounts_receivable_control');
         $positive = (float) $source->amount >= 0;
@@ -716,6 +721,11 @@ class AccountingPostingService
     private function postSupplierPayment(SupplierPayment $source, ?User $user): Collection
     {
         $amount = abs(round((float) $source->amount, 3));
+
+        if ($amount < 0.0005) {
+            return collect();
+        }
+
         $paymentAccount = $this->supplierPaymentCreditAccount($source);
         $ap = $this->mappedAccount('accounts_payable_control');
         $positive = (float) $source->amount >= 0;
@@ -728,40 +738,60 @@ class AccountingPostingService
 
     private function postStockPurchase(StockPurchase $source, ?User $user): Collection
     {
-        $amount = round((float) $source->total_cost, 3);
+        $signedAmount = round((float) $source->total_cost, 3);
+        $amount = abs($signedAmount);
+
+        if ($amount < 0.0005) {
+            return collect();
+        }
+
         $inventory = $this->mappedAccount('inventory_default', $source->material_id ? 'material' : null, $source->material_id);
+        $positive = $signedAmount > 0;
 
         return collect([$this->postSourceEntry($source, 'stock_purchase', $amount, [
-            $this->line($inventory->id, $amount, 0, supplierId: $source->supplier_id, materialId: $source->material_id),
-            $this->line($this->mappedAccount('accounts_payable_control')->id, 0, $amount, supplierId: $source->supplier_id, materialId: $source->material_id),
+            $this->line($inventory->id, $positive ? $amount : 0, $positive ? 0 : $amount, supplierId: $source->supplier_id, materialId: $source->material_id),
+            $this->line($this->mappedAccount('accounts_payable_control')->id, $positive ? 0 : $amount, $positive ? $amount : 0, supplierId: $source->supplier_id, materialId: $source->material_id),
         ], $user)]);
     }
 
     private function postStockSale(StockSale $source, ?User $user): Collection
     {
-        $revenue = round((float) $source->sales_value, 3);
+        $signedRevenue = round((float) $source->sales_value, 3);
+        $revenue = abs($signedRevenue);
         $inventory = $this->mappedAccount('inventory_default', $source->material_id ? 'material' : null, $source->material_id);
+        $entries = collect();
+
+        if ($revenue >= 0.0005) {
+            $positiveRevenue = $signedRevenue > 0;
+            $entries->push($this->postSourceEntry($source, 'stock_sale_revenue', $revenue, [
+                $this->line($this->mappedAccount('accounts_receivable_control')->id, $positiveRevenue ? $revenue : 0, $positiveRevenue ? 0 : $revenue, customerId: $source->customer_id, materialId: $source->material_id),
+                $this->line($this->mappedAccount('stock_sales_income')->id, $positiveRevenue ? 0 : $revenue, $positiveRevenue ? $revenue : 0, customerId: $source->customer_id, materialId: $source->material_id),
+            ], $user));
+        }
+
+        if (abs((float) $source->weight_kg) < 0.0005) {
+            return $entries;
+        }
+
         $costPerKg = $this->calculator->weightedAverageStockCost(
             $source->material_id,
             $source->date->toDateString(),
             $source->id
         );
-        $cogs = round((float) $source->weight_kg * $costPerKg, 3);
+        $signedCogs = round((float) $source->weight_kg * $costPerKg, 3);
+        $cogs = abs($signedCogs);
 
         if ($cogs <= 0) {
             throw ValidationException::withMessages(['accounting' => 'Stock sale material cost could not be calculated.']);
         }
 
-        return collect([
-            $this->postSourceEntry($source, 'stock_sale_revenue', $revenue, [
-                $this->line($this->mappedAccount('accounts_receivable_control')->id, $revenue, 0, customerId: $source->customer_id, materialId: $source->material_id),
-                $this->line($this->mappedAccount('stock_sales_income')->id, 0, $revenue, customerId: $source->customer_id, materialId: $source->material_id),
-            ], $user),
-            $this->postSourceEntry($source, 'stock_sale_cogs', $cogs, [
-                $this->line($this->mappedAccount('stock_material_cogs')->id, $cogs, 0, customerId: $source->customer_id, materialId: $source->material_id),
-                $this->line($inventory->id, 0, $cogs, customerId: $source->customer_id, materialId: $source->material_id),
-            ], $user),
-        ]);
+        $positiveWeight = $signedCogs > 0;
+        $entries->push($this->postSourceEntry($source, 'stock_sale_cogs', $cogs, [
+            $this->line($this->mappedAccount('stock_material_cogs')->id, $positiveWeight ? $cogs : 0, $positiveWeight ? 0 : $cogs, customerId: $source->customer_id, materialId: $source->material_id),
+            $this->line($inventory->id, $positiveWeight ? 0 : $cogs, $positiveWeight ? $cogs : 0, customerId: $source->customer_id, materialId: $source->material_id),
+        ], $user));
+
+        return $entries;
     }
 
     private function postSourceEntry(Model $source, string $postingType, float $amount, array $lines, ?User $user): JournalEntry

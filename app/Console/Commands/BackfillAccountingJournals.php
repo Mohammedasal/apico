@@ -90,9 +90,13 @@ class BackfillAccountingJournals extends Command
     private function expectedEntryCount(Model $source): int
     {
         return match (true) {
-            $source instanceof RecycleOut => (float) $source->total_amount > 0 ? 1 : 0,
-            $source instanceof StockSale => 2,
-            default => 1,
+            $source instanceof RecycleOut => abs((float) $source->total_amount) >= 0.0005 ? 1 : 0,
+            $source instanceof Payment => abs((float) $source->amount) >= 0.0005 ? 1 : 0,
+            $source instanceof SupplierPayment => abs((float) $source->amount) >= 0.0005 ? 1 : 0,
+            $source instanceof StockPurchase => abs((float) $source->total_cost) >= 0.0005 ? 1 : 0,
+            $source instanceof StockSale => (abs((float) $source->sales_value) >= 0.0005 ? 1 : 0)
+                + (abs((float) $source->weight_kg) >= 0.0005 ? 1 : 0),
+            default => 0,
         };
     }
 

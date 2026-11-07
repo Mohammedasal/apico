@@ -43,14 +43,34 @@ class AccountingDashboardController extends Controller
                 $entry->source_type.':'.$entry->source_id.':'.$entry->posting_type => true,
             ]);
         $expected = collect();
-        RecycleOut::where('total_amount', '!=', 0)->each(fn (RecycleOut $row) => $expected->push('RecycleOut:'.$row->id.':recycle_out_revenue'));
-        Payment::each(fn (Payment $row) => $expected->push('Payment:'.$row->id.':customer_payment'));
-        StockPurchase::each(fn (StockPurchase $row) => $expected->push('StockPurchase:'.$row->id.':stock_purchase'));
-        StockSale::each(function (StockSale $row) use ($expected) {
-            $expected->push('StockSale:'.$row->id.':stock_sale_revenue');
-            $expected->push('StockSale:'.$row->id.':stock_sale_cogs');
+        RecycleOut::each(function (RecycleOut $row) use ($expected) {
+            if (abs((float) $row->total_amount) >= 0.0005) {
+                $expected->push('RecycleOut:'.$row->id.':recycle_out_revenue');
+            }
         });
-        SupplierPayment::each(fn (SupplierPayment $row) => $expected->push('SupplierPayment:'.$row->id.':supplier_payment'));
+        Payment::each(function (Payment $row) use ($expected) {
+            if (abs((float) $row->amount) >= 0.0005) {
+                $expected->push('Payment:'.$row->id.':customer_payment');
+            }
+        });
+        StockPurchase::each(function (StockPurchase $row) use ($expected) {
+            if (abs((float) $row->total_cost) >= 0.0005) {
+                $expected->push('StockPurchase:'.$row->id.':stock_purchase');
+            }
+        });
+        StockSale::each(function (StockSale $row) use ($expected) {
+            if (abs((float) $row->sales_value) >= 0.0005) {
+                $expected->push('StockSale:'.$row->id.':stock_sale_revenue');
+            }
+            if (abs((float) $row->weight_kg) >= 0.0005) {
+                $expected->push('StockSale:'.$row->id.':stock_sale_cogs');
+            }
+        });
+        SupplierPayment::each(function (SupplierPayment $row) use ($expected) {
+            if (abs((float) $row->amount) >= 0.0005) {
+                $expected->push('SupplierPayment:'.$row->id.':supplier_payment');
+            }
+        });
         $covered = $expected->filter(fn (string $key) => $posted->has($key))->count();
         $total = $expected->count();
 
