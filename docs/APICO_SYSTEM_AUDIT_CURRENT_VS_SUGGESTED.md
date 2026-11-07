@@ -19,13 +19,13 @@ Completed and regression-tested:
 - Imported recycle revenue variances are shown before confirmation, preserved with calculated and workbook totals, and timestamped as approved by the admin import action.
 - Verified MySQL/SQLite backup service, daily server backup script with checksums and retention, permanent predeploy backups, and an on-demand verified Artisan backup command.
 - Before/after audit records for operational transactions, supplier payments, customers, suppliers, users, production, monthly expenses, settings, cheque settlement, accounting actions, and committed imports. An admin-only searchable Audit Log page is available.
-- Automated release quality workflow with Composer and pnpm vulnerability audits. Current local regression: 163 tests and 924 assertions passing. Phase 3 local release qualification is recorded in `docs/PHASE_3_RELEASE_QUALIFICATION.md`.
+- Automated release quality workflow with Composer and pnpm vulnerability audits. Current local regression: 165 tests and 932 assertions passing. Phase 3 local/live-data release qualification is recorded in `docs/PHASE_3_RELEASE_QUALIFICATION.md`.
 
-Still open before release qualification:
+Still open before deployment:
 
 - Decide and document the conversion-cost allocation policy when production and stock-sale months differ.
 - Define process loss only after production inputs can be matched to processing batches; do not infer it from unrelated recycle-in/out totals.
-- Supply the production predeployment backup reference and obtain release-owner/operator signatures. The local checklist, rollback procedure, browser/RTL/print evidence, MySQL backup/restore drill, and migration rehearsal are complete. No deployment is authorized yet.
+- Correct production debug/timezone settings, create a fresh maintenance-window backup, and obtain release-owner/operator signatures. Browser/RTL/print evidence, production-snapshot restore, migration rehearsal, and isolated accounting-backfill rehearsal are complete. No deployment is authorized yet.
 
 ## Purpose
 

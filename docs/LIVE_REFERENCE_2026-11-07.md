@@ -98,16 +98,29 @@ Journal debits and credits match exactly in this snapshot.
 - Dashboard remaining recycle stock: 47,234.000 kg
 - Raw purchased stock remaining: 21,620.550 kg
 
-### Accounting coverage hold
+## Accounting backfill rehearsal
 
-The required dry-run command found 1,690 of 2,610 operational sources missing expected accounting journals. No backfill was committed.
+- Backfill database: `apico_live_backfill_rehearsal_20261107`
+- Source: disposable clone of the successfully migrated rehearsal database
+- Eligible operational sources: 2,610
+- Sources missing journals before the corrected rehearsal: 1,689
+- Baseline journals: 893 entries / 1,786 lines
+- Baseline debit and credit: 454,874.867 JOD each
 
-| Source | Total sources | Sources missing expected journals |
-| --- | ---: | ---: |
-| Positive-amount recycle-out | 519 | 385 |
-| Customer payments | 629 | 461 |
-| Stock purchases | 789 | 559 |
-| Stock sales | 362 | 285 |
-| Supplier payments | 0 | 0 |
+The first commit rehearsal rejected historical zero/negative stock-purchase corrections with `Accounting amount must be greater than zero`. The command was inside one database transaction, and verification confirmed a complete rollback to 893 entries / 1,786 lines. Candidate code commit `47d618d` then added explicit correction-direction posting and zero-value handling for payments, purchases, and sales, and aligned the backfill and dashboard coverage rules.
 
-Deployment may proceed only with an explicit decision about historical accounting coverage. The journal backfill must be rehearsed and reconciled on another disposable clone before any production `--commit` is considered.
+The corrected commit rehearsal completed successfully:
+
+| Check | Result |
+| --- | ---: |
+| Journal entries after backfill | 2,867 |
+| Journal lines after backfill | 5,734 |
+| Debit after backfill | 930,504.656 JOD |
+| Credit after backfill | 930,504.656 JOD |
+| Expected operational journals covered | 2,660 / 2,660 |
+| Sources still missing journals | 0 |
+| Dashboard coverage | 100% |
+
+A second `--commit` run was idempotent: the entry/line counts and totals did not change, and the command again reported zero missing sources. MySQL checksums for `customers`, `suppliers`, `recycle_outs`, `payments`, `stock_purchases`, `stock_sales`, and `supplier_payments` match the migrated source clone exactly, confirming that backfill added journals without changing operational source rows.
+
+This rehearsal proves the candidate can backfill the captured data; it does not authorize a production backfill. Production `apico:accounting-backfill --commit` remains a separately approved accounting action and is excluded from the application/schema deployment.

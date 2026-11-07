@@ -1,21 +1,23 @@
 # APICO Phase 3 Release Qualification
 
-Qualification date: 2026-10-20  
-Source branch: `phase-3-safety-regression`  
-Starting commit: `15c503136f5378046fe13a5292966548f665cf24`  
-Environment: local Windows/XAMPP clone; no production access and no deployment
+- Qualification date: 2026-10-20; live-data continuation: 2026-11-07
+- Source branch: `live-reference-2026-11-07`
+- Starting commit: `15c503136f5378046fe13a5292966548f665cf24`
+- Qualified code commit: `47d618d`
+
+Environment: local Windows/XAMPP; production was read only except for creating the requested backup files; no deployment
 
 ## Release decision
 
 **Code checkpoint: qualified. Deployment: HOLD.**
 
-The Phase 3 code and migration are qualified for a release checkpoint. Production deployment remains explicitly unauthorized until an operator supplies the production backup reference, confirms the maintenance window, and signs the deployment section below.
+The Phase 3 code, migration, and historical journal backfill behavior are qualified against a restored 2026-11-07 live snapshot. Production deployment remains explicitly unauthorized until the production environment is corrected, a fresh backup is captured for the maintenance window, and the release owner/operator sign the deployment section below.
 
 ## Qualification evidence
 
 | Gate | Result | Evidence |
 | --- | --- | --- |
-| Full Laravel regression | PASS | 163 tests, 924 assertions, 0 failures on PHP 8.4.21 and Laravel 13.38.0. |
+| Full Laravel regression | PASS | 165 tests, 932 assertions, 0 failures after the live-data correction fix. |
 | Production asset build | PASS | `pnpm run build`; Vite 8.3.4 completed successfully. The optional Fontaine optimization notice is non-blocking. |
 | Frontend dependency audit | PASS | `pnpm audit --audit-level=high`: no known vulnerabilities. |
 | PHP dependency audit | PASS after lock refresh | The original lockfile exposed 26 advisories across six packages. Dependencies were refreshed within `composer.json` constraints; `composer audit --locked` then reported no advisories. |
@@ -25,9 +27,10 @@ The Phase 3 code and migration are qualified for a release checkpoint. Productio
 | Print/PDF layout | PASS with browser limitation noted | Customer Statement rendered with five tables, a dedicated running-ledger print area, both print actions, and an active `@media print` rule. Print CSS uses A4 landscape, hides navigation/forms/no-print controls, avoids row splitting, and supports ledger-only output. The in-app qualification browser does not expose its native print-preview surface, so no PDF file was saved. |
 | Dashboard recycling balance | PASS | Dashboard shows total remaining recycling stock as customer opening kg plus recycle-in minus recycle-out, independently from purchased stock inventory. |
 | Statement print filenames | PASS | Customer and supplier statement and ledger-only print titles include the counterparty name and selected month. |
-| MySQL backup/restore | PASS | `apico_local` was dumped with `--single-transaction --routines --triggers`, verified non-empty, SHA-256 recorded, and restored to isolated database `apico_qualification_20261020`. Source and restore matched at 36 tables, 4 users, and 1,215 customers. |
-| Migration rehearsal | PASS | Pending migration `2026_10_17_000001_classify_recycle_out_adjustments` ran successfully on the restored clone only. The working `apico_local` database was not migrated. |
-| Production safety | PASS | No production connection, backup, migration, tag push, or deployment was performed. |
+| MySQL backup/restore | PASS | The requested production snapshot was downloaded, SHA-256/gzip verified, and restored to isolated database `apico_live_reference_20261107`: 36 tables, 4 users, and 1,215 customers. |
+| Migration rehearsal | PASS | Migration `2026_10_17_000001_classify_recycle_out_adjustments` ran in 4.69 seconds on a disposable live-data clone. All 830 recycle-out IDs and original values were preserved; calculated/variance mismatches were zero. |
+| Accounting backfill rehearsal | PASS | A failed first attempt rolled back completely. After correction handling was added, the disposable clone reached 2,867 entries / 5,734 lines, balanced at 930,504.656 JOD, 2,660/2,660 expected journals, zero missing, unchanged source-table checksums, and an unchanged second commit run. |
+| Production safety | PASS | Production database/application/schema were not changed. Only backup archive/checksum files were created; no migration, backfill, code switch, tag push, or deployment occurred. |
 
 ## Backup/restore rehearsal record
 
@@ -40,11 +43,23 @@ The Phase 3 code and migration are qualified for a release checkpoint. Productio
 
 This local rehearsal artifact is not the required production predeployment backup. Database dumps and credentials must not be committed.
 
+## Live reference record
+
+- Production code at capture: `82e4afb96511756d04be69b98d2830140308e0ee` on `phase-2-accounting`
+- Archive: `/home/apico/backups/predeploy/apico-predeploy-20261107-141115.sql.gz`
+- SHA-256: `e17b2400c4fd3cb5470c6475ddf2b6e686c999385cada8d1fdcffc22c5a1e67a`
+- Local immutable restore: `apico_live_reference_20261107`
+- Migrated clone: `apico_live_rehearsal_20261107`
+- Backfill clone: `apico_live_backfill_rehearsal_20261107`
+- Detailed evidence: `docs/LIVE_REFERENCE_2026-11-07.md`
+
+This is a verified reference, not a substitute for a new backup immediately before deployment if production has changed.
+
 ## Deployment checklist (not executed)
 
 - [ ] Release owner approves the production maintenance window.
-- [ ] Production `.env` is verified with `APP_ENV=production` and `APP_DEBUG=false`.
-- [ ] A permanent `predeploy` backup is created with `ops/server/backup-apico.sh predeploy`.
+- [ ] Production `.env` is corrected to `APP_ENV=production`, `APP_DEBUG=false`, and `APP_TIMEZONE=Asia/Amman` (capture showed debug enabled and UTC).
+- [ ] A fresh permanent `predeploy` backup is created for the approved maintenance window; the current live commit does not yet contain `ops/server/backup-apico.sh`.
 - [ ] The production backup archive, checksum, and restore-readiness check are recorded below.
 - [ ] The release checkpoint commit/tag is confirmed as the intended deployment source.
 - [ ] Database migration status is captured before deployment.
@@ -52,9 +67,12 @@ This local rehearsal artifact is not the required production predeployment backu
 - [ ] Post-deployment smoke, accounting reconciliation, scheduler, and queue checks pass.
 - [ ] Rollback is rehearsed against the recorded checkpoint and backup reference.
 
-Production backup reference: **PENDING — no production action authorized**  
-Maintenance window: **PENDING**  
-Release owner approval: **PENDING**  
+Reference backup: `/home/apico/backups/predeploy/apico-predeploy-20261107-141115.sql.gz` — fresh window backup pending
+
+Maintenance window: **PENDING**
+
+Release owner approval: **PENDING**
+
 Deployment operator sign-off: **PENDING**
 
 ## Rollback plan

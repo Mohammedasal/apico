@@ -1,11 +1,13 @@
 # APICO Phase 3 Deployment Plan
 
-Plan date: 2026-11-07  
-Candidate branch: `phase-3-safety-regression`  
-Candidate tag: `phase-3-deployment-candidate-2026-11-07`  
-Status: **PREPARATION ONLY — deployment is not authorized**
+- Plan date: 2026-11-07
+- Candidate branch: `live-reference-2026-11-07`
+- Candidate code commit: `47d618d`
+- Qualification tag: `phase-3-live-qualified-2026-11-07`
 
-Current hold: the 2026-11-07 live-data rehearsal found 1,690 of 2,610 operational sources missing expected accounting journals. The schema migration itself passed without changing original transaction values. Historical accounting backfill remains unapproved and must be rehearsed separately before production deployment.
+Status: **LOCAL/LIVE-DATA QUALIFICATION COMPLETE — deployment is not authorized**
+
+The live-data migration and journal-backfill rehearsals pass on disposable local clones. Remaining holds are operational approval, a maintenance window, a fresh window-time backup, and production environment correction: production had `APP_DEBUG=true` and timezone `UTC` at capture time. Historical `apico:accounting-backfill --commit` remains a separate accounting action and is not part of this deployment.
 
 ## Scope
 
@@ -24,11 +26,11 @@ Do not start the maintenance window until every field is complete.
 - Release owner: **PENDING**
 - Deployment operator: **PENDING**
 - Maintenance window: **PENDING**
-- Current production commit: **PENDING**
-- Candidate commit/tag verified: **PENDING**
-- Permanent predeployment backup path: **PENDING**
-- Backup SHA-256: **PENDING**
-- Backup restore verification: **PENDING**
+- Current production commit: `82e4afb96511756d04be69b98d2830140308e0ee`
+- Candidate code commit: `47d618d`; qualification tag must be verified again by the operator
+- Reference backup: `/home/apico/backups/predeploy/apico-predeploy-20261107-141115.sql.gz`
+- Reference backup SHA-256: `e17b2400c4fd3cb5470c6475ddf2b6e686c999385cada8d1fdcffc22c5a1e67a`
+- Reference backup restore verification: **PASS**; fresh maintenance-window backup still required
 - Rollback owner: **PENDING**
 
 ## Phase 1 — read-only production preflight
@@ -51,13 +53,13 @@ Do not start the maintenance window until every field is complete.
 
 ## Phase 2 — permanent backup and rollback preparation
 
-From `/var/www/apico`, create the permanent backup using the deployed script:
+The current production commit does not contain `ops/server/backup-apico.sh`. Before changing code, create a fresh permanent backup using the same reviewed manual `mysqldump --single-transaction --routines --triggers` procedure used for the verified 2026-11-07 reference. After this release is installed, the packaged script is available for future backups:
 
 ```bash
 sudo -u apico /var/www/apico/ops/server/backup-apico.sh predeploy
 ```
 
-Then:
+Do not assume the packaged script exists until the candidate code is installed. For either approved method:
 
 1. Record the exact `.sql.gz` path and `.sha256` path.
 2. Verify the checksum and `gzip -t` result.
@@ -116,6 +118,8 @@ Application smoke checks:
 - Queue, scheduler, cheque alert cache, logs, and protected production error behavior.
 
 **Hold point D:** Release owner compares the pre/post evidence and explicitly approves reopening the application.
+
+Historical journal coverage is reconciled separately. Do not run `apico:accounting-backfill --commit` in this release window; the command has passed a local live-data rehearsal but still requires accounting-owner approval and its own before/after reconciliation.
 
 ## Phase 5 — reopen and observe
 
