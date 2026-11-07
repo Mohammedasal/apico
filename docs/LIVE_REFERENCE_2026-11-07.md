@@ -76,3 +76,38 @@ Journal debits and credits match exactly in this snapshot.
 - Do not migrate this reference database in place. Clone it first, then rehearse on the clone.
 - Do not commit the SQL archive, extracted SQL, `.env`, passwords, or SSH material.
 - Before the eventual production deployment, create a new permanent predeployment backup because production may change after this reference was captured.
+
+## Phase 3 migration rehearsal
+
+- Rehearsal database: `apico_live_rehearsal_20261107`
+- Source: isolated clone of `apico_live_reference_20261107`
+- Migration duration: 4.69 seconds locally
+- Migration batch: 4
+- Reference database modified: no
+- Missing or extra recycle-out IDs: 0
+- Recycle-out rows with changed original fields: 0
+- Original recycle-out totals before/after: identical
+- Journal debit/credit before/after: 454,874.867 / 454,874.867 JOD
+- Classified output rows: 829
+- Classified correction rows: 1
+- Classified return rows: 0
+- Amount-variance rows: 1
+- Amount variance: -70.500 JOD
+- Calculation mismatches after migration: 0
+- Variance-calculation mismatches after migration: 0
+- Dashboard remaining recycle stock: 47,234.000 kg
+- Raw purchased stock remaining: 21,620.550 kg
+
+### Accounting coverage hold
+
+The required dry-run command found 1,690 of 2,610 operational sources missing expected accounting journals. No backfill was committed.
+
+| Source | Total sources | Sources missing expected journals |
+| --- | ---: | ---: |
+| Positive-amount recycle-out | 519 | 385 |
+| Customer payments | 629 | 461 |
+| Stock purchases | 789 | 559 |
+| Stock sales | 362 | 285 |
+| Supplier payments | 0 | 0 |
+
+Deployment may proceed only with an explicit decision about historical accounting coverage. The journal backfill must be rehearsed and reconciled on another disposable clone before any production `--commit` is considered.

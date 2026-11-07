@@ -5,6 +5,8 @@ Candidate branch: `phase-3-safety-regression`
 Candidate tag: `phase-3-deployment-candidate-2026-11-07`  
 Status: **PREPARATION ONLY — deployment is not authorized**
 
+Current hold: the 2026-11-07 live-data rehearsal found 1,690 of 2,610 operational sources missing expected accounting journals. The schema migration itself passed without changing original transaction values. Historical accounting backfill remains unapproved and must be rehearsed separately before production deployment.
+
 ## Scope
 
 This release includes the qualified Phase 3 safety, reporting, accounting, import, audit, and export work plus:
